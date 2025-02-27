@@ -4,218 +4,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paymanshu Sharma - Resume</title>
-    <style>
-         :root {
-            --primary-color: #2c3e50;
-            --secondary-color: #3498db;
-            --text-color: #333;
-            --light-bg: #f8f9fa;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-            color: var(--text-color);
-            background-color: #fff;
-        }
-        
-        header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid var(--secondary-color);
-        }
-        
-        h1 {
-            color: var(--primary-color);
-            margin-bottom: 10px;
-            font-size: 2.5rem;
-        }
-        
-        h2 {
-            color: var(--primary-color);
-            border-bottom: 1px solid #eee;
-            padding-bottom: 5px;
-            margin-top: 30px;
-        }
-        
-        h3 {
-            color: var(--secondary-color);
-            margin-bottom: 5px;
-        }
-        
-        .contact-info {
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .contact-info p {
-            margin: 0;
-        }
-        
-        .section {
-            margin-bottom: 30px;
-        }
-        
-        .job,
-        .education {
-            margin-bottom: 25px;
-        }
-        
-        .job-header,
-        .edu-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            flex-wrap: wrap;
-        }
-        
-        .job-date,
-        .edu-date {
-            color: #666;
-            font-style: italic;
-        }
-        
-        .skills-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            list-style: none;
-            padding: 0;
-        }
-        
-        .skills-list li {
-            background-color: var(--light-bg);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-        }
-        
-        .pdf-link {
-            text-align: center;
-            margin: 40px 0;
-        }
-        
-        .pdf-button {
-            display: inline-block;
-            background-color: var(--secondary-color);
-            color: white;
-            padding: 10px 20px;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
-        
-        .pdf-button:hover {
-            background-color: var(--primary-color);
-        }
-        
-        footer {
-            text-align: center;
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-            color: #666;
-            font-size: 0.9rem;
-        }
-        
-        @media (max-width: 768px) {
-            body {
-                padding: 15px;
-            }
-            .job-header,
-            .edu-header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-        }
-    </style>
+    <title>Paymanshu Sharma | Machine Learning Engineer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Current font -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Additional elegant font options -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <meta name="description" content="Paymanshu Sharma - Machine Learning Engineer specializing in AI solutions and data science.">
+    <meta name="google-site-verification" content="0o-VrKZb3IemUzf8qmVFsl_dRpOwOPaZU1azIjFYnkw" />
 </head>
 
 <body>
-    <header>
-        <h1>Paymanshu Sharma</h1>
-        <div class="contact-info">
-            <p>Email: <a href="mailto:your.email@example.com">your.email@example.com</a></p>
-            <p>LinkedIn: <a href="https://linkedin.com/in/yourprofile" target="_blank">linkedin.com/in/yourprofile</a></p>
-            <p>GitHub: <a href="https://github.com/paymanshus" target="_blank">github.com/paymanshus</a></p>
-        </div>
-    </header>
-
-    <section class="section">
-        <h2>Summary</h2>
-        <p>Machine Learning Engineer with experience in developing and deploying ML models. Passionate about solving complex problems and creating efficient, scalable solutions.</p>
-    </section>
-
-    <section class="section">
-        <h2>Experience</h2>
-        <div class="job">
-            <div class="job-header">
-                <h3>Machine Learning Engineer - Company Name</h3>
-                <span class="job-date">Month 20XX - Present</span>
-            </div>
-            <ul>
-                <li>Developed and deployed machine learning models that improved prediction accuracy by X%</li>
-                <li>Collaborated with cross-functional teams to implement data-driven solutions</li>
-                <li>Optimized existing algorithms resulting in X% improvement in processing time</li>
-            </ul>
-        </div>
-
-        <div class="job">
-            <div class="job-header">
-                <h3>Data Scientist - Previous Company</h3>
-                <span class="job-date">Month 20XX - Month 20XX</span>
-            </div>
-            <ul>
-                <li>Led data analysis projects that uncovered key business insights</li>
-                <li>Built and maintained data pipelines using [technologies]</li>
-                <li>Presented findings to stakeholders and implemented recommendations</li>
-            </ul>
-        </div>
-    </section>
-
-    <section class="section">
-        <h2>Education</h2>
-        <div class="education">
-            <div class="edu-header">
-                <h3>Master's/Bachelor's Degree - University Name</h3>
-                <span class="edu-date">20XX - 20XX</span>
-            </div>
-            <p>Relevant coursework: Machine Learning, Data Structures, Algorithms, etc.</p>
-        </div>
-    </section>
-
-    <section class="section">
-        <h2>Skills</h2>
-        <ul class="skills-list">
-            <li>Python</li>
-            <li>TensorFlow</li>
-            <li>PyTorch</li>
-            <li>SQL</li>
-            <li>Data Analysis</li>
-            <li>Machine Learning</li>
-            <li>Deep Learning</li>
-            <li>Cloud Computing</li>
-            <li>Git</li>
-            <li>Docker</li>
-        </ul>
-    </section>
-
-    <div class="pdf-link">
-        <a href="assets/Paymanshu_Sharma_Resume.pdf" class="pdf-button" target="_blank">Download Full Resume (PDF)</a>
+    <!-- Shapes are commented out as requested but kept in HTML for future reference
+    <div class="shapes">
+        <div class="shape"></div>
+        <div class="shape"></div>
+        <div class="shape"></div>
+        <div class="shape"></div>
     </div>
+    -->
+
+    <!-- Custom cursor commented out as requested but kept in HTML for future reference
+    <div class="cursor"></div>
+    <div class="cursor-follower"></div>
+    -->
+
+    <section class="hero">
+        <!-- Particles canvas commented out as requested but kept for future reference
+        <canvas id="particles"></canvas>
+        -->
+        <div class="container">
+            <div class="hero-content">
+                <!-- Badge commented out as requested
+                <div class="badge">Machine Learning Engineer</div>
+                -->
+                <h1>Hello there!<br>I'm <span>Paymanshu Sharma</span></h1>
+                <!-- <p class="animate-on-scroll">Passionate about building intelligent systems that solve real-world problems. I blend technical expertise with creative thinking to develop innovative solutions.</p> -->
+
+                <div class="cta-buttons">
+                    <a href="assets/Paymanshu_Sharma_Resume.pdf" class="btn" target="_blank">
+                        <span>View Resume</span>
+                        <i class="fas fa-file-alt"></i>
+                    </a>
+                    <a href="#" class="btn btn-outline">
+                        <span>Explore Projects</span>
+                        <i class="fas fa-code"></i>
+                    </a>
+                </div>
+
+                <div class="social-links">
+                    <a href="mailto:paymanshu@gmail.com" aria-label="Email" class="tooltip" data-tooltip="Email">
+                        <i class="fas fa-envelope"></i>
+                    </a>
+                    <a href="https://linkedin.com/in/paymanshus" target="_blank" aria-label="LinkedIn" class="tooltip" data-tooltip="LinkedIn">
+                        <i class="fab fa-linkedin-in"></i>
+                    </a>
+                    <a href="https://github.com/paymanshus" target="_blank" aria-label="GitHub" class="tooltip" data-tooltip="GitHub">
+                        <i class="fab fa-github"></i>
+                    </a>
+                    <a href="https://twitter.com/paymanshu" target="_blank" aria-label="Twitter" class="tooltip" data-tooltip="Twitter">
+                        <i class="fab fa-twitter"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scroll indicator removed as requested -->
+    </section>
+
+    <section class="coming-soon" id="blog">
+        <div class="container">
+            <h2>Blog Coming Soon</h2>
+            <p class="animate-on-scroll"></p>
+
+            <!-- Countdown removed as requested -->
+
+            <a href="#" class="btn notify-btn">
+                <span>Notify Me</span>
+                <i class="fas fa-bell"></i>
+            </a>
+        </div>
+    </section>
 
     <footer>
-        <p>This site is currently under development. Check back soon for my blog and portfolio!</p>
+        <div class="container">
+            <p>Made with <span class="heart">❤️</span> by Paymanshu Sharma + Cursor <i class="fas fa-robot" style="color: var(--secondary-color)"></i></p>
+        </div>
     </footer>
+
+    <!-- JavaScript files -->
+    <script src="js/particles.js"></script>
+    <script src="js/main.js"></script>
 </body>
 
 </html>
