@@ -77,44 +77,130 @@ updateCountdown(); // Initial call
 // Notification button
 const notifyBtn = document.querySelector('.notify-btn');
 if (notifyBtn) {
-    notifyBtn.addEventListener('click', () => {
-        alert('Thank you! You will be notified when the blog launches.');
-        notifyBtn.textContent = 'You will be notified!';
+    notifyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        // Create a success message with animation
+        const successMessage = document.createElement('div');
+        successMessage.className = 'success-message';
+        successMessage.innerHTML = 'Thank you! You will be notified when the blog launches.';
+
+        // Insert the message before the button
+        notifyBtn.parentNode.insertBefore(successMessage, notifyBtn);
+
+        // Animate the message
+        setTimeout(() => {
+            successMessage.classList.add('show');
+        }, 10);
+
+        // Update button
+        notifyBtn.innerHTML = '<span>You will be notified!</span><i class="fas fa-check"></i>';
+        notifyBtn.classList.add('disabled');
         notifyBtn.disabled = true;
+
+        // Remove the message after 5 seconds
+        setTimeout(() => {
+            successMessage.classList.remove('show');
+            setTimeout(() => {
+                successMessage.remove();
+            }, 500);
+        }, 5000);
     });
 }
 
 // Smooth scrolling for anchor links
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function(e) {
-        e.preventDefault();
-
         const targetId = this.getAttribute('href');
         if (targetId === '#') return;
 
         const targetElement = document.querySelector(targetId);
         if (targetElement) {
+            e.preventDefault();
+            const headerOffset = 60;
+            const elementPosition = targetElement.getBoundingClientRect().top;
+            const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
             window.scrollTo({
-                top: targetElement.offsetTop,
+                top: offsetPosition,
                 behavior: 'smooth'
             });
         }
     });
 });
 
-// Animate elements on scroll
+// Simplified animate on scroll with straightforward animations
 const animateOnScroll = () => {
-    const elements = document.querySelectorAll('.animate-on-scroll');
+    const elements = document.querySelectorAll('.animate-on-scroll:not(.animated)');
 
-    elements.forEach(element => {
+    elements.forEach((element, index) => {
         const elementPosition = element.getBoundingClientRect().top;
         const windowHeight = window.innerHeight;
 
-        if (elementPosition < windowHeight - 100) {
-            element.classList.add('animated');
+        if (elementPosition < windowHeight - 50) {
+            // Add a small delay based on the element's index for staggered effect
+            setTimeout(() => {
+                element.classList.add('animated');
+            }, index * 100); // 100ms delay between each element
         }
     });
 };
 
-window.addEventListener('scroll', animateOnScroll);
-animateOnScroll(); // Initial check
+// Mobile menu toggle (if needed in the future)
+/*
+const menuToggle = document.querySelector('.menu-toggle');
+const mobileMenu = document.querySelector('.mobile-menu');
+
+if (menuToggle && mobileMenu) {
+    menuToggle.addEventListener('click', () => {
+        menuToggle.classList.toggle('active');
+        mobileMenu.classList.toggle('active');
+    });
+}
+*/
+
+// Check if device is touch-enabled
+const isTouchDevice = () => {
+    return (('ontouchstart' in window) ||
+        (navigator.maxTouchPoints > 0) ||
+        (navigator.msMaxTouchPoints > 0));
+};
+
+// Add touch class to body if it's a touch device
+if (isTouchDevice()) {
+    document.body.classList.add('touch-device');
+}
+
+// Simplified scroll handler without parallax effects
+const handleScroll = () => {
+    // Only run the animation check
+    animateOnScroll();
+};
+
+// Initialize
+window.addEventListener('scroll', handleScroll);
+window.addEventListener('resize', () => {
+    animateOnScroll();
+    setVhProperty();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    animateOnScroll();
+    setVhProperty();
+
+    // Add a loaded class to the body for initial animations
+    setTimeout(() => {
+        document.body.classList.add('loaded');
+    }, 100);
+});
+
+// Fix for iOS vh units
+const setVhProperty = () => {
+    let vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+};
+
+window.addEventListener('orientationchange', setVhProperty);
+
+// Run initial scroll handler
+handleScroll();
