@@ -109,6 +109,7 @@ RSYNC_EXCLUDES=(
   --exclude='node_modules'
   --exclude='.next'
   --exclude='out'
+  --exclude='tsconfig.tsbuildinfo'
   --exclude='.env.local'
   --exclude='.env.*.local'
   --exclude='readmes'
