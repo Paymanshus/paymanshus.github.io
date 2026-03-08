@@ -1,5 +1,5 @@
 import type {Metadata} from 'next';
-import { Space_Grotesk, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
+import { Space_Grotesk, Instrument_Serif, JetBrains_Mono, Lora } from 'next/font/google';
 import { absoluteUrl, siteConfig } from '@/lib/site';
 import './globals.css';
 
@@ -12,6 +12,11 @@ const instrumentSerif = Instrument_Serif({
   weight: '400',
   subsets: ['latin'],
   variable: '--font-instrument-serif',
+});
+
+const lora = Lora({
+  subsets: ['latin'],
+  variable: '--font-lora',
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -62,7 +67,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`${spaceGrotesk.variable} ${instrumentSerif.variable} ${lora.variable} ${jetbrainsMono.variable}`}>
       <body className="bg-bg text-text-primary antialiased selection:bg-brand-red/30 selection:text-white" suppressHydrationWarning>
         <div className="mx-auto w-full max-w-7xl px-6 md:px-12 lg:px-24">
           {children}

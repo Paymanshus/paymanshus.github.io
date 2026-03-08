@@ -10,7 +10,7 @@ const BOOT_SEQUENCE = [
   "AUTHENTICATING USER...",
   "ACCESS GRANTED.",
   " ",
-  "Welcome to PAYMANSHU_OS v2.0.4",
+  "Welcome to PAYMANSHU_OS v2.6.0",
   "Type 'help' to see available commands.",
   " "
 ];
@@ -27,32 +27,32 @@ const RESPONSES: Record<string, string[]> = {
   ],
   about: [
     "NAME: Paymanshu Sharma",
-    "ROLE: Software Engineer & Designer",
-    "LOCATION: Earth",
-    "STATUS: Building austere, high-performance interfaces."
+    "ROLE: ML Engineer / Product Engineer",
+    "LOCATION: Bangalore, India",
+    "STATUS: Building AI-native products and interaction-heavy web systems."
   ],
   skills: [
-    "LANGUAGES: TypeScript, Python, Rust, Go",
-    "FRONTEND: React, Next.js, Tailwind CSS, Framer Motion",
-    "BACKEND: Node.js, Express, PostgreSQL, Redis",
-    "TOOLS: Git, Docker, AWS, Vercel"
+    "LANGUAGES: Python, TypeScript, SQL",
+    "ML / AI: LLM apps, agent workflows, evaluation loops",
+    "APP STACK: React, Next.js, FastAPI, Tailwind CSS",
+    "TOOLS: Git, Docker, GitHub Actions, Vercel"
   ],
   experience: [
-    "[2023 - PRESENT] Senior Frontend Engineer @ TechCorp",
-    "  - Architected and rebuilt core web application",
-    "  - Improved performance metrics by 40%",
+    "[CURRENT] ML Engineer / Product Engineer",
+    "  - Building LLM-native interfaces and product prototypes",
+    "  - Shipping full-stack work across React and Python systems",
     " ",
-    "[2021 - 2023] Full Stack Developer @ StartupX",
-    "  - Developed real-time collaboration features",
-    "  - Managed CI/CD pipelines"
+    "[FOCUS] Systems + Interaction",
+    "  - Strong emphasis on UX clarity, speed, and maintainability",
+    "  - See PDF mode for fuller resume detail"
   ],
   education: [
-    "B.S. Computer Science",
-    "University of Technology, 2021"
+    "EDUCATION DETAILS AVAILABLE IN PDF MODE",
+    "Use the PDF tab for the complete formal resume."
   ],
   contact: [
     "EMAIL: paymanshus@gmail.com",
-    "GITHUB: github.com/paymanshu",
+    "GITHUB: github.com/paymanshus",
     "LINKEDIN: linkedin.com/in/paymanshu"
   ]
 };

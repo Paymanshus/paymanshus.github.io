@@ -13,6 +13,7 @@
 
   --font-sans: var(--font-space-grotesk), sans-serif;
   --font-serif: var(--font-instrument-serif), serif;
+  --font-reading: var(--font-lora), serif;
   --font-mono: var(--font-jetbrains-mono), monospace;
 }
 
@@ -58,10 +59,13 @@
 
 .thought-post-content {
   color: rgb(245 245 245 / 0.92);
-  font-family: var(--font-instrument-serif), serif;
-  font-size: clamp(1.05rem, 0.98rem + 0.34vw, 1.28rem);
-  line-height: 1.95;
-  letter-spacing: 0.005em;
+  font-family: var(--font-reading), serif;
+  font-size: clamp(1.12rem, 1.03rem + 0.22vw, 1.24rem);
+  line-height: 1.82;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-rendering: optimizeLegibility;
+  font-kerning: normal;
 }
 
 .thought-post-content > * + * {
@@ -90,7 +94,7 @@
 .thought-post-content p,
 .thought-post-content li,
 .thought-post-content blockquote {
-  max-width: 60rem;
+  max-width: 68ch;
 }
 
 .thought-post-content a {
@@ -140,6 +144,7 @@
   border-left: 1px solid rgb(255 42 42 / 0.45);
   padding-left: 1.25rem;
   color: var(--color-text-secondary);
+  font-style: italic;
 }
 
 .landing-grid-shell {

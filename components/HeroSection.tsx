@@ -7,7 +7,7 @@ import RippleGrid from './RippleGrid';
 export default function HeroSection() {
   const name = 'PAYMANSHU SHARMA';
   const nameLines = ['PAYMANSHU', 'SHARMA'];
-  const descriptorSegments = ['Developer & Architect', 'Bangalore', 'Systems & Interaction'];
+  const descriptorSegments = ['ML Engineer', 'Product Engineer']; //  'Bangalore',
 
   const container = {
     hidden: { opacity: 0 },
@@ -44,7 +44,7 @@ export default function HeroSection() {
             />
           </div>
         </div>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,transparent_0%,transparent_42%,rgba(0,0,0,0.45)_76%,rgba(0,0,0,0.9)_100%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,transparent_0%,transparent_42%,rgba(0,0,0,0.45)_76%,rgba(0,0,0,0.9)_100%)]" />
       </div>
 
       <div className="relative z-10 flex h-full w-full flex-col justify-center pb-28 pt-24">

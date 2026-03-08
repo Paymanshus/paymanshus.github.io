@@ -33,7 +33,7 @@ const VoiceResume = dynamic(() => import('./resume/VoiceResume'), {
 });
 
 export default function ExperienceSection() {
-  const [mode, setMode] = useState<ResumeMode>('pdf');
+  const [mode, setMode] = useState<ResumeMode>('chat');
   const [isPending, startTransition] = useTransition();
 
   return (

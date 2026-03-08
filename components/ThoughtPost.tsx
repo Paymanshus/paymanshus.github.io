@@ -6,7 +6,7 @@ import ReadingProgressBar from '@/components/ReadingProgressBar';
 
 export default function ThoughtPost({ post }: { post: BlogPost }) {
   return (
-    <article className="mx-auto max-w-[72rem] px-4 pb-32 pt-12 sm:px-6">
+    <article className="mx-auto max-w-[50rem] pb-32 pt-12">
       <ReadingProgressBar />
 
       <Link
@@ -17,7 +17,7 @@ export default function ThoughtPost({ post }: { post: BlogPost }) {
         Back to Thoughts
       </Link>
 
-      <header className="mb-16 max-w-4xl">
+      <header className="mb-16">
         <div className="mb-6 flex flex-wrap items-center gap-4 font-mono text-sm uppercase tracking-widest text-brand-red">
           <time dateTime={post.date}>{post.displayDate}</time>
           <span className="text-text-secondary">{post.readingTimeText}</span>
@@ -25,7 +25,7 @@ export default function ThoughtPost({ post }: { post: BlogPost }) {
         <h1 className="mb-8 text-4xl font-light leading-tight tracking-tight md:text-5xl">
           {post.title}
         </h1>
-        <p className="max-w-3xl font-serif text-lg italic leading-relaxed text-text-secondary md:text-[1.325rem]">
+        <p className="max-w-[42rem] font-serif text-lg italic leading-relaxed text-text-secondary md:text-[1.325rem]">
           {post.excerpt}
         </p>
         <p className="mt-6 font-mono text-xs uppercase tracking-[0.24em] text-text-secondary">

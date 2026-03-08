@@ -19,6 +19,13 @@ type RippleGridProps = {
 };
 
 const DEFAULT_MOUSE = { x: 0.5, y: 0.5 };
+const MOBILE_BREAKPOINT = 768;
+
+type FloorPerspectiveMapping = {
+  perspective: number;
+  rotateX: number;
+  scale: number;
+};
 
 function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -32,6 +39,37 @@ function hexToRgb(hex: string): [number, number, number] {
     parseInt(result[2], 16) / 255,
     parseInt(result[3], 16) / 255,
   ];
+}
+
+function getFloorPerspectiveMapping(): FloorPerspectiveMapping {
+  if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT) {
+    return {
+      perspective: 1050,
+      rotateX: 70,
+      scale: 1.55,
+    };
+  }
+
+  return {
+    perspective: 1500,
+    rotateX: 68,
+    scale: 1.28,
+  };
+}
+
+function mapScreenYToPlaneY(screenY: number, planeHeight: number, mapping: FloorPerspectiveMapping) {
+  const clampedScreenY = Math.max(0, screenY);
+  const angle = (mapping.rotateX * Math.PI) / 180;
+  const numerator = clampedScreenY * mapping.perspective;
+  const denominator =
+    mapping.scale *
+    (Math.cos(angle) * mapping.perspective + clampedScreenY * Math.sin(angle));
+
+  if (!planeHeight || denominator <= 0) {
+    return 0;
+  }
+
+  return numerator / denominator / planeHeight;
 }
 
 export default function RippleGrid({
@@ -72,6 +110,7 @@ export default function RippleGrid({
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.canvas.style.width = '100%';
     gl.canvas.style.height = '100%';
+    gl.canvas.style.pointerEvents = 'none';
     container.appendChild(gl.canvas);
 
     const vertex = `
@@ -210,7 +249,7 @@ void main() {
       uniforms.iResolution.value = [clientWidth, clientHeight];
     };
 
-    const handleMouseMove = (event: MouseEvent) => {
+    const handlePointerMove = (event: PointerEvent) => {
       if (!mouseInteraction) {
         return;
       }
@@ -221,30 +260,38 @@ void main() {
         return;
       }
 
-      targetMouseRef.current = {
-        x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
-        y: Math.max(0, Math.min(1, 1 - (event.clientY - rect.top) / rect.height)),
-      };
-    };
+      const nextX = (event.clientX - rect.left) / rect.width;
+      const screenY = event.clientY - rect.top;
+      const isInside = nextX >= 0 && nextX <= 1 && screenY >= 0 && screenY <= rect.height;
 
-    const handleMouseEnter = (event: MouseEvent) => {
-      if (!mouseInteraction) {
+      if (!isInside) {
+        mouseInfluenceRef.current = 0;
         return;
       }
 
-      handleMouseMove(event);
+      const planeHeight = container.clientHeight || rect.height;
+      const mappedPlaneY = mapScreenYToPlaneY(
+        screenY,
+        planeHeight,
+        getFloorPerspectiveMapping(),
+      );
+      const nextY = 1 - mappedPlaneY;
+
+      targetMouseRef.current = {
+        x: Math.max(0, Math.min(1, nextX)),
+        y: Math.max(0, Math.min(1, nextY)),
+      };
       mouseInfluenceRef.current = 1;
     };
 
-    const handleMouseLeave = () => {
+    const handlePointerLeave = () => {
       mouseInfluenceRef.current = 0;
     };
 
     window.addEventListener('resize', resize);
     if (mouseInteraction) {
-      container.addEventListener('mousemove', handleMouseMove);
-      container.addEventListener('mouseenter', handleMouseEnter);
-      container.addEventListener('mouseleave', handleMouseLeave);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerleave', handlePointerLeave);
     }
     resize();
 
@@ -268,9 +315,8 @@ void main() {
     return () => {
       window.removeEventListener('resize', resize);
       if (mouseInteraction) {
-        container.removeEventListener('mousemove', handleMouseMove);
-        container.removeEventListener('mouseenter', handleMouseEnter);
-        container.removeEventListener('mouseleave', handleMouseLeave);
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerleave', handlePointerLeave);
       }
 
       if (animationFrameRef.current !== null) {

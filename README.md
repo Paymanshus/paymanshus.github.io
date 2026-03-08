@@ -22,6 +22,14 @@ This project is configured for:
 
 When this code lives inside the `paymanshus.github.io` repository, pushing to `main` will build and deploy the exported site to GitHub Pages.
 
+For one-command local deployment into an existing clone of `paymanshus.github.io`, use:
+
+```bash
+./scripts/deploy-pages.sh -m "Your commit message"
+```
+
+The script builds the app, rsyncs the public-safe project files into the target clone, commits, and pushes.
+
 ## Content
 
 - Blog posts live in `content/blog`
