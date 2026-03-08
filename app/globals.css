@@ -1,0 +1,172 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --color-bg: #050505;
+  --color-surface: #0a0a0a;
+  --color-border: #1a1a1a;
+  --color-text-primary: #f5f5f5;
+  --color-text-secondary: #8a8a8a;
+  --color-brand-red: #ff2a2a;
+  --color-glow: rgba(255, 42, 42, 0.15);
+  --color-tron-glow: rgba(255, 42, 42, 0.3);
+
+  --font-sans: var(--font-space-grotesk), sans-serif;
+  --font-serif: var(--font-instrument-serif), serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+.glow-text {
+  text-shadow: 0 0 10px var(--color-glow), 0 0 20px var(--color-tron-glow);
+}
+
+.glow-box {
+  box-shadow: 0 0 15px var(--color-glow), 0 0 30px var(--color-tron-glow);
+}
+
+.terminal-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  background-color: var(--color-brand-red);
+  animation: blink 1s step-end infinite;
+  vertical-align: middle;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.thought-post-content {
+  color: rgb(245 245 245 / 0.92);
+  font-family: var(--font-instrument-serif), serif;
+  font-size: clamp(1.05rem, 0.98rem + 0.34vw, 1.28rem);
+  line-height: 1.95;
+  letter-spacing: 0.005em;
+}
+
+.thought-post-content > * + * {
+  margin-top: 2rem;
+}
+
+.thought-post-content h2,
+.thought-post-content h3 {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-style: normal;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  color: var(--color-text-primary);
+}
+
+.thought-post-content h2 {
+  margin-top: 4rem;
+  font-size: clamp(2rem, 1.6rem + 1vw, 3rem);
+}
+
+.thought-post-content h3 {
+  margin-top: 3rem;
+  font-size: clamp(1.5rem, 1.2rem + 0.8vw, 2rem);
+}
+
+.thought-post-content p,
+.thought-post-content li,
+.thought-post-content blockquote {
+  max-width: 60rem;
+}
+
+.thought-post-content a {
+  color: var(--color-text-primary);
+  text-decoration-color: rgb(255 42 42 / 0.5);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.thought-post-content strong {
+  color: var(--color-text-primary);
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-weight: 500;
+}
+
+.thought-post-content code {
+  border: 1px solid var(--color-border);
+  background: rgb(255 255 255 / 0.03);
+  padding: 0.15rem 0.35rem;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 0.9em;
+}
+
+.thought-post-content pre {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  background: rgb(255 255 255 / 0.03);
+  padding: 1.25rem;
+}
+
+.thought-post-content pre code {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.thought-post-content ul,
+.thought-post-content ol {
+  padding-left: 1.4rem;
+}
+
+.thought-post-content li + li {
+  margin-top: 0.8rem;
+}
+
+.thought-post-content blockquote {
+  border-left: 1px solid rgb(255 42 42 / 0.45);
+  padding-left: 1.25rem;
+  color: var(--color-text-secondary);
+}
+
+.landing-grid-shell {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.landing-grid-floor {
+  position: absolute;
+  left: -10vw;
+  right: -10vw;
+  top: 28vh;
+  bottom: -14vh;
+  opacity: 0.94;
+  transform: perspective(1500px) rotateX(68deg) scale(1.28);
+  transform-origin: center top;
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 10%, rgba(0, 0, 0, 0.94) 54%, transparent 88%);
+  filter: drop-shadow(0 0 10px rgba(255, 42, 42, 0.2));
+}
+
+@media (max-width: 768px) {
+  .landing-grid-floor {
+    left: -24vw;
+    right: -24vw;
+    top: 34vh;
+    bottom: -22vh;
+    transform: perspective(1050px) rotateX(70deg) scale(1.55);
+  }
+}

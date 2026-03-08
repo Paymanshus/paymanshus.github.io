@@ -1,35 +1,29 @@
-# Paymanshu Sharma's Portfolio
+# Paymanshu Sharma Portfolio
 
-This repository contains the code for my personal portfolio website hosted at [paymanshus.github.io](https://paymanshus.github.io).
+Static-exported Next.js portfolio and blog, intended for deployment to `paymanshus.github.io` via GitHub Pages.
 
-## Current Features
-- Modern, professional landing page with a balanced color scheme
-- Background image with dark semi-transparent overlay
-- Direct link to downloadable PDF resume
-- Social media links
-- Mobile-responsive design
-- "Coming Soon" section for the blog
-- Properly organized CSS in external file
+## Local Development
 
-## Planned Features
-- Project showcase section
-- Blog implementation (exploring Next.js or Notion integration)
-- Dark/light mode toggle
-- Contact form
-- Interactive elements to showcase ML projects
+1. Install dependencies with `npm install`
+2. Copy `.env.example` to `.env.local` if you want to override the production URL locally
+3. Run `npm run dev`
 
-## Development
-This site is currently built with HTML, CSS, and JavaScript. Future plans include exploring Next.js for enhanced functionality, particularly for the blog section.
+## Production Build
 
-### Blog Options
-Two main options are being considered for the blog:
-1. **Self-hosted with Next.js** - Complete control, better integration, learning opportunity
-2. **Notion integration** - Easier content management, quicker setup
+Run `npm run build`. The static site is emitted to `out/`.
 
-See the `blog-options.md` file for a detailed comparison.
+## GitHub Pages Deployment
 
-## Next.js Starter
-A Next.js starter template is available in the `next-portfolio-starter` directory for future development.
+This project is configured for:
 
-## License
-See the [LICENSE](LICENSE) file for details.
+- Next.js app router
+- static export via `output: 'export'`
+- GitHub Actions deployment from `.github/workflows/deploy.yml`
+
+When this code lives inside the `paymanshus.github.io` repository, pushing to `main` will build and deploy the exported site to GitHub Pages.
+
+## Content
+
+- Blog posts live in `content/blog`
+- SEO metadata is centralized in `lib/site.ts`
+- `readmes/` is repo-only documentation and is not publicly served

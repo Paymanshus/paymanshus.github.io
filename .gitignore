@@ -1,4 +1,8 @@
-blog-options.md
-
-next-portfolio-starter/*
-next-portfolio-starter
+node_modules/
+.next/
+out/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
