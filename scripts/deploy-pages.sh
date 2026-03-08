@@ -75,16 +75,32 @@ if ! git -C "$TARGET_REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; 
   exit 1
 fi
 
+TARGET_BRANCH="$(git -C "$TARGET_REPO_DIR" branch --show-current)"
+if [[ "$TARGET_BRANCH" != "main" ]]; then
+  printf 'Target repo must be on main, found: %s\n' "$TARGET_BRANCH" >&2
+  exit 1
+fi
+
 if [[ -n "$(git -C "$TARGET_REPO_DIR" status --porcelain)" ]]; then
   printf 'Target repo has uncommitted changes: %s\n' "$TARGET_REPO_DIR" >&2
   exit 1
 fi
 
+printf 'Fast-forwarding target repo from origin/main\n'
+git -C "$TARGET_REPO_DIR" pull --ff-only origin main
+
 if ((SKIP_BUILD == 0)); then
   printf 'Building source app in %s\n' "$SOURCE_DIR"
   (
     cd "$SOURCE_DIR"
+    npm run clean >/dev/null 2>&1 || true
     npm run build
+  )
+else
+  printf 'Skipping local build, refreshing generated SEO files in %s\n' "$SOURCE_DIR"
+  (
+    cd "$SOURCE_DIR"
+    npm run generate:seo
   )
 fi
 

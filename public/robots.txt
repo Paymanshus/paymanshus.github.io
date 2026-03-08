@@ -1,0 +1,5 @@
+User-Agent: *
+Allow: /
+
+Host: https://paymanshus.github.io
+Sitemap: https://paymanshus.github.io/sitemap.xml

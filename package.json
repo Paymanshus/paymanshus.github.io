@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run generate:seo && next build",
     "start": "next start",
     "lint": "eslint .",
-    "clean": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\""
+    "clean": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
+    "generate:seo": "node ./scripts/generate-seo-files.mjs"
   },
   "dependencies": {
     "autoprefixer": "^10.4.21",

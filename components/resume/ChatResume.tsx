@@ -27,33 +27,34 @@ const RESPONSES: Record<string, string[]> = {
   ],
   about: [
     "NAME: Paymanshu Sharma",
-    "ROLE: ML Engineer / Product Engineer",
+    "ROLE: Machine Learning Engineer",
     "LOCATION: Bangalore, India",
-    "STATUS: Building AI-native products and interaction-heavy web systems."
+    "STATUS: Building." // AI-native products across LLM systems, voice agents, and full-stack interfaces
   ],
   skills: [
-    "LANGUAGES: Python, TypeScript, SQL",
-    "ML / AI: LLM apps, agent workflows, evaluation loops",
+    "LANGUAGES: Python, TypeScript, SQL, C++",
+    "ML / AI: LLM apps, agent workflows, NLP, multimodal systems",
     "APP STACK: React, Next.js, FastAPI, Tailwind CSS",
-    "TOOLS: Git, Docker, GitHub Actions, Vercel"
+    "TOOLS: Git, Docker, AWS, LangGraph, Vercel"
   ],
   experience: [
-    "[CURRENT] ML Engineer / Product Engineer",
-    "  - Building LLM-native interfaces and product prototypes",
-    "  - Shipping full-stack work across React and Python systems",
+    "[CURRENT] Machine Learning Engineer @ Maersk",
+    "  - Building Shipment CoCaptain, an agentic AI shipment insights product",
+    "  - Shipping full-stack work across React, LangGraph, and evaluation systems",
     " ",
-    "[FOCUS] Systems + Interaction",
-    "  - Strong emphasis on UX clarity, speed, and maintainability",
+    "[PREVIOUS] Hike, Mphasis NEXT Labs, research-driven AI roles",
+    "  - Voice agents, document AI, mobile IDP, and multimodal ML systems",
     "  - See PDF mode for fuller resume detail"
   ],
   education: [
-    "EDUCATION DETAILS AVAILABLE IN PDF MODE",
+    "B.Tech. in Data Science",
+    "MPSTME, NMIMS | Mumbai | 2018 - 2022",
     "Use the PDF tab for the complete formal resume."
   ],
   contact: [
     "EMAIL: paymanshus@gmail.com",
     "GITHUB: github.com/paymanshus",
-    "LINKEDIN: linkedin.com/in/paymanshu"
+    "LINKEDIN: linkedin.com/in/paymanshus"
   ]
 };
 

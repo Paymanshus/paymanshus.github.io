@@ -28,7 +28,13 @@ For one-command local deployment into an existing clone of `paymanshus.github.io
 ./scripts/deploy-pages.sh -m "Your commit message"
 ```
 
-The script builds the app, rsyncs the public-safe project files into the target clone, commits, and pushes.
+The script fast-forwards the target clone, builds the app, rsyncs the public-safe project files into it, commits, and pushes.
+
+If you only want to sync and let GitHub Actions perform the canonical build, use:
+
+```bash
+./scripts/deploy-pages.sh -m "Your commit message" --skip-build
+```
 
 ## Content
 
