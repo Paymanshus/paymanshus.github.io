@@ -32,10 +32,24 @@ export const metadata: Metadata = {
   },
   description: siteConfig.description,
   applicationName: siteConfig.defaultTitle,
+  manifest: '/favicons/site.webmanifest',
   authors: [{ name: siteConfig.name, url: siteConfig.url }],
   creator: siteConfig.name,
   publisher: siteConfig.name,
   keywords: ['Paymanshu Sharma', 'developer portfolio', 'Next.js'],
+  themeColor: '#040404',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicons/favicon-32x32.png', type: 'image/png', sizes: '32x32' },
+      { url: '/favicons/favicon-16x16.png', type: 'image/png', sizes: '16x16' },
+    ],
+    apple: [{ url: '/favicons/apple-touch-icon.png', type: 'image/png', sizes: '180x180' }],
+    other: [
+      { rel: 'icon', url: '/favicons/android-chrome-192x192.png', type: 'image/png', sizes: '192x192' },
+      { rel: 'icon', url: '/favicons/android-chrome-512x512.png', type: 'image/png', sizes: '512x512' },
+    ],
+  },
   alternates: {
     canonical: absoluteUrl('/'),
   },
