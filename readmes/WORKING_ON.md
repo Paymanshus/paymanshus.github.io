@@ -1,0 +1,20 @@
+# Active
+- `WORKING_ON.md`: active edit map
+- `package.json` / `package-lock.json`: markdown deps
+- `app/layout.tsx`: root metadata
+- `app/page.tsx`: home schema
+- `app/experience/page.tsx`: route metadata
+- `app/thoughts/page.tsx`: blog index route
+- `app/thoughts/[slug]/page.tsx`: post route + metadata
+- `app/globals.css`: markdown/post styles
+- `app/sitemap.ts` / `app/robots.ts`: crawl metadata
+- `components/SiteHeader.tsx`: route nav
+- `components/SiteShell.tsx`: shared shell
+- `components/HeroSection.tsx`: route links
+- `components/ThoughtsSection.tsx`: blog index
+- `components/ThoughtPost.tsx`: blog reading view
+- `components/ReadingProgressBar.tsx`: reading progress
+- `components/StructuredData.tsx`: JSON-LD
+- `lib/site.ts`: site SEO helpers
+- `lib/blog.ts`: markdown loader
+- `content/blog/*.md`: blog source/template

@@ -7,8 +7,9 @@ coverage/
 *.log
 .env*
 !.env.example
-WORKING_ON.md
+# WORKING_ON.md
 metadata.json
 paymanshu-sharma-portfolio.zip
-readmes/
+# readmes/
 stitch_assets/
+deployed/
