@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_SITE_URL: https://paymanshus.github.io
+      # Uncomment once the Feature 07 voice agent is deployed to Fly.io:
+      # NEXT_PUBLIC_AGENT_URL: https://<fly-app>.fly.dev
     steps:
       - name: Checkout
         uses: actions/checkout@v4

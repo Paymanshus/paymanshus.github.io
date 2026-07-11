@@ -2,16 +2,20 @@ import type { Metadata } from 'next';
 
 export const siteConfig = {
   name: 'Paymanshu Sharma',
-  defaultTitle: 'Paymanshu Sharma | Developer & Architect',
+  firstName: 'Paymanshu',
+  jobTitle: 'Machine Learning Engineer',
+  employer: 'Maersk',
+  defaultTitle: 'Paymanshu Sharma | Machine Learning Engineer',
   description:
-    'Austere Neon developer portfolio with interactive resume modes, route-based sections, and long-form engineering thoughts.',
+    'Paymanshu Sharma is a Machine Learning Engineer at Maersk, Bangalore, building agentic AI and voice systems. Portfolio with an interactive resume you can talk to — PDF, terminal, and voice — plus essays on ML and engineering.',
   url: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshus.github.io',
   locale: 'en_US',
-  location: 'New Delhi, India',
+  location: 'Bangalore, India',
   email: 'paymanshus@gmail.com',
   links: {
     github: 'https://github.com/Paymanshus',
-    linkedin: 'https://www.linkedin.com/in/paymanshu',
+    linkedin: 'https://www.linkedin.com/in/paymanshus',
+    huggingface: 'https://huggingface.co/paymanshus',
   },
 } as const;
 
@@ -23,13 +27,16 @@ type SeoInput = {
   type?: 'website' | 'article';
   publishedTime?: string;
   modifiedTime?: string;
+  ogImage?: string;
 };
 
-const defaultKeywords = [
+export const defaultKeywords = [
   'Paymanshu Sharma',
-  'developer portfolio',
-  'Next.js portfolio',
-  'software engineer',
+  'Paymanshu',
+  'Machine Learning Engineer',
+  'ML engineer Bangalore',
+  'agentic AI',
+  'voice AI',
   'engineering blog',
 ];
 
@@ -40,6 +47,79 @@ export function absoluteUrl(path = '/') {
 
   const normalizedPath = `${path.replace(/\/+$/, '')}/`;
   return new URL(normalizedPath, siteConfig.url).toString();
+}
+
+// Stable node ids for the site-wide JSON-LD entity graph. Every page that
+// mentions the person/site must reference these via {'@id': ...} instead of
+// re-declaring its own Person copy, so crawlers reconcile a single entity.
+export const PERSON_ID = `${siteConfig.url}/#person`;
+export const WEBSITE_ID = `${siteConfig.url}/#website`;
+
+// Minimal Person stub carrying the shared @id: locally valid on any page,
+// reconciled with the full node emitted on the home page.
+export function personRef() {
+  return {
+    '@type': 'Person',
+    '@id': PERSON_ID,
+    name: siteConfig.name,
+    url: absoluteUrl('/'),
+  };
+}
+
+export function personJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    '@id': PERSON_ID,
+    name: siteConfig.name,
+    givenName: 'Paymanshu',
+    familyName: 'Sharma',
+    url: absoluteUrl('/'),
+    email: `mailto:${siteConfig.email}`,
+    jobTitle: siteConfig.jobTitle,
+    worksFor: {
+      '@type': 'Organization',
+      name: siteConfig.employer,
+      url: 'https://www.maersk.com',
+    },
+    alumniOf: {
+      '@type': 'CollegeOrUniversity',
+      name: 'MPSTME, NMIMS Mumbai',
+    },
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: 'Bangalore',
+      addressCountry: 'IN',
+    },
+    knowsAbout: [
+      'Machine Learning',
+      'Agentic AI',
+      'Large Language Models',
+      'Voice AI',
+      'Natural Language Processing',
+      'Computer Vision',
+      'MLOps',
+      'LangGraph',
+      'Retrieval-Augmented Generation',
+    ],
+    sameAs: [
+      siteConfig.links.github,
+      siteConfig.links.linkedin,
+      siteConfig.links.huggingface,
+    ],
+  };
+}
+
+export function websiteJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': WEBSITE_ID,
+    name: siteConfig.defaultTitle,
+    url: absoluteUrl('/'),
+    description: siteConfig.description,
+    publisher: personRef(),
+  };
 }
 
 export function toIsoDate(date: string) {
@@ -65,8 +145,10 @@ export function createMetadata({
   type = 'website',
   publishedTime,
   modifiedTime,
+  ogImage,
 }: SeoInput): Metadata {
   const fullTitle = `${title} | ${siteConfig.name}`;
+  const images = ogImage ? [absoluteUrl(ogImage)] : undefined;
 
   return {
     title,
@@ -84,11 +166,13 @@ export function createMetadata({
       locale: siteConfig.locale,
       publishedTime,
       modifiedTime,
+      images,
     },
     twitter: {
       card: 'summary_large_image',
       title: fullTitle,
       description,
+      images,
     },
   };
 }

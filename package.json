@@ -8,12 +8,15 @@
     "start": "next start",
     "lint": "eslint .",
     "clean": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
-    "generate:seo": "node ./scripts/generate-seo-files.mjs"
+    "generate:seo": "node ./scripts/generate-seo-files.mjs",
+    "test:seo": "node ./tests/seo/check-static-output.mjs"
   },
   "dependencies": {
+    "@livekit/components-react": "^2.9.21",
     "autoprefixer": "^10.4.21",
     "clsx": "^2.1.1",
     "gray-matter": "^4.0.3",
+    "livekit-client": "^2.20.1",
     "lucide-react": "^0.553.0",
     "motion": "^12.23.24",
     "next": "^15.4.9",

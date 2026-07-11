@@ -2,14 +2,14 @@ import type { Metadata } from 'next';
 import ExperienceSection from '@/components/ExperienceSection';
 import SiteShell from '@/components/SiteShell';
 import StructuredData from '@/components/StructuredData';
-import { absoluteUrl, createMetadata, siteConfig } from '@/lib/site';
+import { absoluteUrl, createMetadata, personRef } from '@/lib/site';
 
 export const metadata: Metadata = createMetadata({
   title: 'Experience',
   description:
-    'Interactive resume modes for Paymanshu Sharma, including PDF, terminal chat, and voice-driven views.',
+    'Interactive resume of Paymanshu Sharma, Machine Learning Engineer at Maersk — read the PDF, ask the terminal, or talk to a voice agent grounded in his experience.',
   path: '/experience',
-  keywords: ['resume', 'portfolio experience', 'interactive resume'],
+  keywords: ['resume', 'interactive resume', 'voice resume', 'Maersk'],
 });
 
 export default function ExperiencePage() {
@@ -22,11 +22,7 @@ export default function ExperiencePage() {
           name: 'Experience',
           url: absoluteUrl('/experience'),
           description: 'Interactive resume section for Paymanshu Sharma.',
-          mainEntity: {
-            '@type': 'Person',
-            name: siteConfig.name,
-            jobTitle: 'Developer & Architect',
-          },
+          mainEntity: personRef(),
         }}
       />
       <SiteShell>

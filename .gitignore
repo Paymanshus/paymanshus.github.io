@@ -1,3 +1,9 @@
+# Agent server
+agent/.venv/
+agent/.env.local
+agent/__pycache__/
+agent/**/__pycache__/
+
 node_modules/
 .next/
 out/
@@ -10,6 +16,10 @@ coverage/
 # WORKING_ON.md
 metadata.json
 paymanshu-sharma-portfolio.zip
-# readmes/
 stitch_assets/
 deployed/
+# Private planning/docs — never publish
+readmes/
+docs/
+left.md
+promptlatest.md

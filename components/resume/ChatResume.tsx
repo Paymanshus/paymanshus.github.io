@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+const AGENT_SERVER_URL =
+  process.env.NEXT_PUBLIC_AGENT_URL || 'http://localhost:8080';
 
 const BOOT_SEQUENCE = [
   "INITIALIZING SYSTEM...",
@@ -11,7 +14,7 @@ const BOOT_SEQUENCE = [
   "ACCESS GRANTED.",
   " ",
   "Welcome to PAYMANSHU_OS v2.6.0",
-  "Type 'help' to see available commands.",
+  "Type 'help' for commands, or just ask me anything about my experience.",
   " "
 ];
 
@@ -23,13 +26,15 @@ const RESPONSES: Record<string, string[]> = {
     "  experience - Show work history",
     "  education  - Display academic background",
     "  clear      - Clear terminal output",
-    "  contact    - Show contact information"
+    "  contact    - Show contact information",
+    " ",
+    "Or type a free-form question — an LLM with my resume loaded will answer."
   ],
   about: [
     "NAME: Paymanshu Sharma",
     "ROLE: Machine Learning Engineer",
     "LOCATION: Bangalore, India",
-    "STATUS: Building." // AI-native products across LLM systems, voice agents, and full-stack interfaces
+    "STATUS: Building."
   ],
   skills: [
     "LANGUAGES: Python, TypeScript, SQL, C++",
@@ -58,19 +63,65 @@ const RESPONSES: Record<string, string[]> = {
   ]
 };
 
+// Keyword fallback when the LLM backend is unreachable or rate-limited.
+// Maps loose topic keywords onto the canned command outputs.
+const KEYWORD_FALLBACKS: [RegExp, keyof typeof RESPONSES][] = [
+  [/\b(maersk|current|job|work|role|hike|intern|company|companies|career)\b/i, 'experience'],
+  [/\b(skill|stack|language|python|typescript|react|tool|framework|ml|ai|llm)\b/i, 'skills'],
+  [/\b(college|university|degree|study|studied|education|school|btech|b\.tech)\b/i, 'education'],
+  [/\b(email|contact|reach|linkedin|github|hire)\b/i, 'contact'],
+  [/\b(who|about|name|yourself|intro)\b/i, 'about'],
+];
+
+function keywordFallback(query: string): string[] {
+  for (const [pattern, key] of KEYWORD_FALLBACKS) {
+    if (pattern.test(query)) {
+      return [
+        "[OFFLINE MODE] LLM unavailable — closest match:",
+        " ",
+        ...RESPONSES[key],
+      ];
+    }
+  }
+  return [
+    "[OFFLINE MODE] LLM unavailable and no keyword match found.",
+    "Try 'help' for structured commands, or the PDF tab for the full resume.",
+  ];
+}
+
+type HistoryTurn = { role: 'user' | 'system'; text: string };
+
+// History lines render via dangerouslySetInnerHTML (for the styled prompt
+// prefix), so anything user- or LLM-authored must be escaped first.
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export default function ChatResume() {
   const [history, setHistory] = useState<string[]>([]);
   const [input, setInput] = useState('');
   const [isBooting, setIsBooting] = useState(true);
+  const [isThinking, setIsThinking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const chatHistoryRef = useRef<HistoryTurn[]>([]);
+  // Command history buffer — every submitted line, newest last. `cmdIndex` walks
+  // it: null = live (editing `input`), otherwise an index into `cmdHistory`.
+  const cmdHistoryRef = useRef<string[]>([]);
+  const cmdIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     let currentLine = 0;
     const bootInterval = setInterval(() => {
       if (currentLine < BOOT_SEQUENCE.length) {
-        setHistory(prev => [...prev, BOOT_SEQUENCE[currentLine]]);
+        // Capture before the async state updater runs — reading
+        // BOOT_SEQUENCE[currentLine] inside setHistory skips lines
+        const line = BOOT_SEQUENCE[currentLine];
         currentLine++;
+        setHistory(prev => [...prev, line]);
       } else {
         clearInterval(bootInterval);
         setIsBooting(false);
@@ -87,13 +138,46 @@ export default function ChatResume() {
         behavior: 'smooth',
       });
     }
-  }, [history]);
+  }, [history, isThinking]);
+
+  const askLlm = useCallback(async (question: string) => {
+    setIsThinking(true);
+    try {
+      const res = await fetch(`${AGENT_SERVER_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: question,
+          history: chatHistoryRef.current.slice(-6),
+        }),
+      });
+
+      if (res.status === 429) {
+        const data = await res.json().catch(() => ({ error: 'Rate limited.' }));
+        setHistory(prev => [...prev, `[RATE LIMITED] ${data.error}`, " "]);
+        return;
+      }
+      if (!res.ok) throw new Error(`backend ${res.status}`);
+
+      const data = await res.json();
+      const reply: string = data.reply || '';
+      if (!reply) throw new Error('empty reply');
+
+      chatHistoryRef.current.push({ role: 'user', text: question });
+      chatHistoryRef.current.push({ role: 'system', text: reply });
+      setHistory(prev => [...prev, ...escapeHtml(reply).split('\n'), " "]);
+    } catch {
+      setHistory(prev => [...prev, ...keywordFallback(question), " "]);
+    } finally {
+      setIsThinking(false);
+    }
+  }, []);
 
   const handleCommand = (cmd: string) => {
     const trimmedCmd = cmd.trim().toLowerCase();
-    if (!trimmedCmd) return;
+    if (!trimmedCmd || isThinking) return;
 
-    setHistory(prev => [...prev, `<span class="text-brand-red glow-text">&gt;</span> ${cmd}`]);
+    setHistory(prev => [...prev, `<span class="text-brand-red glow-text">&gt;</span> ${escapeHtml(cmd)}`]);
 
     if (trimmedCmd === 'clear') {
       setHistory([]);
@@ -104,14 +188,41 @@ export default function ChatResume() {
     if (response) {
       setHistory(prev => [...prev, ...response, " "]);
     } else {
-      setHistory(prev => [...prev, `Command not found: ${trimmedCmd}`, "Type 'help' for available commands.", " "]);
+      // Free-form question → LLM backend with resume context
+      void askLlm(cmd.trim());
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
+      const submitted = input.trim();
+      if (submitted) {
+        const buf = cmdHistoryRef.current;
+        // Skip storing an immediate duplicate of the last command.
+        if (buf[buf.length - 1] !== submitted) buf.push(submitted);
+      }
+      cmdIndexRef.current = null;
       handleCommand(input);
       setInput('');
+    } else if (e.key === 'ArrowUp') {
+      const buf = cmdHistoryRef.current;
+      if (buf.length === 0) return;
+      e.preventDefault();
+      const next = cmdIndexRef.current === null ? buf.length - 1 : Math.max(0, cmdIndexRef.current - 1);
+      cmdIndexRef.current = next;
+      setInput(buf[next]);
+    } else if (e.key === 'ArrowDown') {
+      const buf = cmdHistoryRef.current;
+      if (cmdIndexRef.current === null) return;
+      e.preventDefault();
+      const next = cmdIndexRef.current + 1;
+      if (next >= buf.length) {
+        cmdIndexRef.current = null;
+        setInput('');
+      } else {
+        cmdIndexRef.current = next;
+        setInput(buf[next]);
+      }
     }
   };
 
@@ -133,7 +244,13 @@ export default function ChatResume() {
             />
           ))}
 
-          {!isBooting && (
+          {isThinking && (
+            <div className="text-[#666666] animate-pulse">
+              PROCESSING QUERY<span className="terminal-cursor ml-1 align-[-0.15em]" />
+            </div>
+          )}
+
+          {!isBooting && !isThinking && (
             <div className="mt-2 flex items-center gap-3 pr-2">
               <span className="text-brand-red glow-text shrink-0">&gt;</span>
               <div className="relative min-w-0 flex-1">

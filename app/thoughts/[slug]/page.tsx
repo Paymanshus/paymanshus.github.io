@@ -4,7 +4,7 @@ import SiteShell from '@/components/SiteShell';
 import StructuredData from '@/components/StructuredData';
 import ThoughtPost from '@/components/ThoughtPost';
 import { getAllBlogSlugs, getBlogPostBySlug } from '@/lib/blog';
-import { absoluteUrl, createMetadata, siteConfig, toIsoDate } from '@/lib/site';
+import { absoluteUrl, createMetadata, personRef, toIsoDate } from '@/lib/site';
 
 type ThoughtPostPageProps = {
   params: Promise<{
@@ -59,15 +59,8 @@ export default async function ThoughtPostPage({ params }: ThoughtPostPageProps) 
           dateModified: toIsoDate(post.updatedAt ?? post.date),
           url: postUrl,
           mainEntityOfPage: postUrl,
-          author: {
-            '@type': 'Person',
-            name: siteConfig.name,
-            url: siteConfig.url,
-          },
-          publisher: {
-            '@type': 'Person',
-            name: siteConfig.name,
-          },
+          author: personRef(),
+          publisher: personRef(),
         }}
       />
       <SiteShell>

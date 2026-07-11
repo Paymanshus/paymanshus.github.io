@@ -1,6 +1,6 @@
 import type {Metadata} from 'next';
 import { Space_Grotesk, Instrument_Serif, JetBrains_Mono, Lora } from 'next/font/google';
-import { absoluteUrl, siteConfig } from '@/lib/site';
+import { absoluteUrl, defaultKeywords, siteConfig } from '@/lib/site';
 import './globals.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   authors: [{ name: siteConfig.name, url: siteConfig.url }],
   creator: siteConfig.name,
   publisher: siteConfig.name,
-  keywords: ['Paymanshu Sharma', 'developer portfolio', 'Next.js'],
+  keywords: [...defaultKeywords],
   themeColor: '#040404',
   icons: {
     icon: [

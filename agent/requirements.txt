@@ -1,0 +1,11 @@
+livekit-agents>=1.0
+livekit-plugins-google
+livekit-plugins-deepgram
+livekit-plugins-cartesia
+livekit-plugins-silero
+livekit-plugins-turn-detector
+livekit-api
+aiohttp
+python-dotenv
+langfuse>=4,<5  # observability (v4 SDK; env-gated, agent runs fine without keys)
+pytest-asyncio  # dev/test
