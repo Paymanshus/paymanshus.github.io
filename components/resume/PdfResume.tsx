@@ -31,18 +31,33 @@ export default function PdfResume() {
         </a>
       </div>
       
-      <div className="flex-1 w-full h-full bg-bg/50 flex items-center justify-center">
-        {shouldLoadPdf ? (
+      <div className="flex-1 w-full h-full bg-bg/50 flex items-center justify-center relative">
+        {/* Fallback sits underneath the iframe. Browsers that refuse to render
+            PDFs inline (most mobile Safari/Chrome) leave the iframe visually
+            empty, which previously read as a broken tab — this guarantees
+            something useful is always behind it. */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center pointer-events-none">
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-text-secondary">
+            {shouldLoadPdf ? 'Inline preview unavailable' : 'Preparing PDF Viewer'}
+          </p>
+          {shouldLoadPdf && (
+            <a
+              href={pdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pointer-events-auto font-mono text-xs uppercase tracking-widest text-brand-red border border-brand-red/40 px-5 py-2 hover:bg-brand-red/10 transition-colors"
+            >
+              Open the resume PDF
+            </a>
+          )}
+        </div>
+
+        {shouldLoadPdf && (
           <iframe
             src={`${pdfUrl}#toolbar=0`}
-            className="w-full h-full border-none"
+            className="w-full h-full border-none relative z-10 bg-bg"
             title="Resume PDF"
-            loading="lazy"
           />
-        ) : (
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-text-secondary">
-            Preparing PDF Viewer
-          </p>
         )}
       </div>
     </div>

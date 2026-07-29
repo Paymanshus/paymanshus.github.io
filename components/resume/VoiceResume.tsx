@@ -10,9 +10,9 @@ import {
 } from '@livekit/components-react';
 import type { TrackReference } from '@livekit/components-react';
 import type { TrackPublication } from 'livekit-client';
+import { trackEvent } from '@/lib/analytics';
 
-const AGENT_SERVER_URL =
-  process.env.NEXT_PUBLIC_AGENT_URL || 'http://localhost:8080';
+import { agentEndpoint, isAgentConfigured, isAgentReachable } from '@/lib/agent';
 
 // localStorage flag set after the first successful mic grant. The Permissions
 // API is the source of truth where supported; this flag covers browsers where
@@ -39,8 +39,9 @@ async function isMicAlreadyGranted(): Promise<boolean> {
 // 'system'   → agent is speaking    → particles expand,   GREEN accent
 // 'thinking' → agent is processing  → slow inward spiral, dim accent
 // 'idle'     → connected, resting   → gentle drift
+// 'resting'  → agent offline        → half-speed drift, cold slate accent
 
-type VoiceState = 'idle' | 'user' | 'system' | 'thinking';
+type VoiceState = 'idle' | 'user' | 'system' | 'thinking' | 'resting';
 
 type RGB = [number, number, number];
 
@@ -49,6 +50,10 @@ const ACCENTS: Record<VoiceState, RGB> = {
   system: [34, 197, 94], // green — agent responding
   thinking: [255, 180, 60], // warm amber — processing
   idle: [255, 42, 42], // dim red heartbeat at rest
+  // Cold slate, deliberately outside the site's red/green vocabulary. Red
+  // reads as "live" everywhere else here, so an offline agent must not wear
+  // it — the field should look dormant, not broken.
+  resting: [96, 122, 148],
 };
 
 // Idle runs the accent at low intensity so red stays scarce until it matters
@@ -57,6 +62,7 @@ const ACCENT_INTENSITY: Record<VoiceState, number> = {
   system: 1,
   thinking: 0.55,
   idle: 0.4,
+  resting: 0.28, // dimmest of all states — present, clearly not listening
 };
 
 // Rotating "thinking" verbs, Claude Code register — quirky but not cartoony.
@@ -168,6 +174,12 @@ class Particle {
       const dy = centerY - this.y;
       this.x += dx * 0.004 - dy * 0.006;
       this.y += dy * 0.004 + dx * 0.006;
+    } else if (state === 'resting') {
+      // Agent offline — same drift as idle at roughly a third speed. Motion
+      // continues (the field should still feel alive, not frozen) but slowly
+      // enough to read as dormant rather than waiting for input.
+      this.x += this.vx * 0.35;
+      this.y += this.vy * 0.35;
     } else {
       const driftScale = 1 + amplitude * 0.5;
       this.x += this.vx * driftScale;
@@ -698,6 +710,65 @@ function ConnectingView() {
   );
 }
 
+/**
+ * Shown when the voice agent is not available — either no backend is
+ * configured for this build, or it is configured but unreachable.
+ *
+ * This is a first-class state, not an error. The tab stays visible and the
+ * particle field keeps running (slower, cold-accented) so the interface still
+ * reads as designed rather than broken. No retry button when there is nothing
+ * to retry against; no mention of the backend or its URL.
+ */
+function RestingView({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-black relative overflow-hidden font-mono">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-50">
+        <ParticleField
+          voiceState="resting"
+          readAgentAmplitude={IDLE_AMPLITUDE}
+          readUserAmplitude={IDLE_AMPLITUDE}
+        />
+      </div>
+
+      <div className="text-center z-10 px-6">
+        {/* Same mic silhouette as idle, muted and struck through — the
+            affordance is recognisably the same object, just off duty. */}
+        <div className="w-20 h-20 mx-auto mb-8 rounded-full border border-[#3A4A5C]/40 flex items-center justify-center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="text-[#607A94]/70">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z" fill="currentColor" />
+            <path
+              d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </div>
+
+        <p className="text-[#8FA8C0] text-sm tracking-[0.2em] uppercase mb-3">
+          Agent Resting
+        </p>
+        <p className="text-[#555555] text-xs max-w-xs mx-auto leading-relaxed">
+          The live voice agent is off duty right now — come back later!
+        </p>
+        <p className="mt-6 text-[#444444] text-[10px] tracking-[0.2em] uppercase">
+          Try the chat or PDF tab meanwhile
+        </p>
+
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="mt-8 border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-[#666666] hover:text-[#8FA8C0] hover:border-[#3A4A5C]/50 transition-colors cursor-pointer"
+          >
+            Check Again
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ErrorView({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-black font-mono text-center px-6">
@@ -715,18 +786,32 @@ function ErrorView({ message, onRetry }: { message: string; onRetry: () => void 
 
 // ─── Top-level component ─────────────────────────────────────────────
 
-type ConnectionState = 'idle' | 'permission' | 'connecting' | 'connected' | 'error';
+type ConnectionState =
+  | 'idle'
+  | 'checking'
+  | 'resting'
+  | 'permission'
+  | 'connecting'
+  | 'connected'
+  | 'error';
 
 export default function VoiceResume() {
   const [connState, setConnState] = useState<ConnectionState>('idle');
   const [token, setToken] = useState('');
   const [wsUrl, setWsUrl] = useState('');
   const [error, setError] = useState('');
+  const sessionStartedAt = useRef(0);
 
   const handlePermissionGranted = useCallback(async () => {
     setConnState('connecting');
+    const endpoint = agentEndpoint('/api/token');
+    if (!endpoint) {
+      setConnState('resting');
+      return;
+    }
+
     try {
-      const res = await fetch(`${AGENT_SERVER_URL}/api/token`, { method: 'POST' });
+      const res = await fetch(endpoint, { method: 'POST' });
       if (res.status === 429) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? 'Rate limited — try again in a minute.');
@@ -737,17 +822,35 @@ export default function VoiceResume() {
       setToken(data.participantToken ?? data.token);
       setWsUrl(data.serverUrl ?? data.url);
       setConnState('connected');
+      sessionStartedAt.current = Date.now();
+      trackEvent('voice_session_start');
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Could not reach the voice agent server.'
-      );
-      setConnState('error');
+      // A backend that is configured but unreachable is the resting state too,
+      // not a red error screen — the visitor did nothing wrong and there is no
+      // action for them to take. Genuine protocol errors (rate limits, bad
+      // responses) still surface as errors with their message.
+      const isUnreachable = err instanceof TypeError;
+      if (isUnreachable) {
+        setConnState('resting');
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Could not reach the voice agent server.'
+        );
+        setConnState('error');
+      }
+      trackEvent('voice_error', { stage: 'token' });
     }
   }, []);
 
   const handleDisconnect = useCallback(() => {
+    if (sessionStartedAt.current) {
+      trackEvent('voice_session_end', {
+        duration_seconds: Math.round((Date.now() - sessionStartedAt.current) / 1000),
+      });
+      sessionStartedAt.current = 0;
+    }
     setToken('');
     setWsUrl('');
     setConnState('idle');
@@ -764,6 +867,21 @@ export default function VoiceResume() {
   }, [connState, handleDisconnect]);
 
   const handleStart = useCallback(async () => {
+    // Availability is checked BEFORE anything touches the microphone. Asking
+    // for mic access and only then discovering the agent is down is the worst
+    // possible order: the visitor grants a sensitive permission and gets
+    // nothing for it.
+    if (!isAgentConfigured) {
+      setConnState('resting');
+      return;
+    }
+
+    setConnState('checking');
+    if (!(await isAgentReachable())) {
+      setConnState('resting');
+      return;
+    }
+
     // Skip the explainer modal entirely when mic access is already granted —
     // it should be a one-time experience per device.
     if (await isMicAlreadyGranted()) {
@@ -776,6 +894,15 @@ export default function VoiceResume() {
   switch (connState) {
     case 'idle':
       return <IdleView onStart={() => void handleStart()} />;
+    case 'checking':
+      return <ConnectingView />;
+    case 'resting':
+      return (
+        <RestingView
+          // Only offer a re-check when there is a backend to re-check against.
+          onRetry={isAgentConfigured ? () => void handleStart() : undefined}
+        />
+      );
     case 'permission':
       return (
         <MicPermissionModal
@@ -799,6 +926,7 @@ export default function VoiceResume() {
           onError={(e) => {
             setError(e.message);
             setConnState('error');
+            trackEvent('voice_error', { stage: 'room' });
           }}
           className="w-full h-full"
         >

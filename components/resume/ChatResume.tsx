@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-
-const AGENT_SERVER_URL =
-  process.env.NEXT_PUBLIC_AGENT_URL || 'http://localhost:8080';
+import { trackEvent } from '@/lib/analytics';
+import { agentEndpoint, isAgentConfigured } from '@/lib/agent';
 
 const BOOT_SEQUENCE = [
   "INITIALIZING SYSTEM...",
@@ -28,7 +27,9 @@ const RESPONSES: Record<string, string[]> = {
     "  clear      - Clear terminal output",
     "  contact    - Show contact information",
     " ",
-    "Or type a free-form question — an LLM with my resume loaded will answer."
+    // Replaced at render time — see HELP_FREEFORM_LINE. Promising an LLM
+    // answer when no backend is configured sets the visitor up to fail.
+    "__FREEFORM__"
   ],
   about: [
     "NAME: Paymanshu Sharma",
@@ -63,28 +64,68 @@ const RESPONSES: Record<string, string[]> = {
   ]
 };
 
-// Keyword fallback when the LLM backend is unreachable or rate-limited.
-// Maps loose topic keywords onto the canned command outputs.
+// Keyword fallback for when the LLM backend is unreachable, rate-limited, or
+// simply not configured for this build. Maps loose topic keywords onto the
+// canned command outputs.
+//
+// Patterns deliberately avoid a trailing \b on stems that pluralise —
+// /\bskill\b/ does NOT match "skills", which silently broke the single most
+// likely question a visitor asks. Stems are left open-ended (\bskill) so
+// "skill", "skills", "skillset" all land, while a leading \b still prevents
+// matching inside unrelated words.
 const KEYWORD_FALLBACKS: [RegExp, keyof typeof RESPONSES][] = [
-  [/\b(maersk|current|job|work|role|hike|intern|company|companies|career)\b/i, 'experience'],
-  [/\b(skill|stack|language|python|typescript|react|tool|framework|ml|ai|llm)\b/i, 'skills'],
-  [/\b(college|university|degree|study|studied|education|school|btech|b\.tech)\b/i, 'education'],
-  [/\b(email|contact|reach|linkedin|github|hire)\b/i, 'contact'],
-  [/\b(who|about|name|yourself|intro)\b/i, 'about'],
+  [
+    /\b(maersk|hike|mphasis|current|job|jobs|work|worked|working|role|roles|intern|internship|compan|career|employ|experience|position|team)/i,
+    'experience',
+  ],
+  [
+    /\b(skill|stack|tech|language|python|typescript|javascript|sql|c\+\+|react|next\.?js|tool|framework|library|libraries|ml|ai|llm|agent|nlp|proficien|know|use)/i,
+    'skills',
+  ],
+  [
+    /\b(college|university|degree|degrees|study|studies|studied|education|educational|school|academic|btech|b\.tech|nmims|mpstme|graduat|major)/i,
+    'education',
+  ],
+  [
+    /\b(email|e-mail|contact|reach|linkedin|github|hire|hiring|connect|touch|message|phone|call)/i,
+    'contact',
+  ],
+  [
+    /\b(who|about|name|yourself|intro|introduce|bio|background|tell me|you do|based|location|live)/i,
+    'about',
+  ],
 ];
 
+// What `help` promises about free-form questions, matched to what this build
+// can actually deliver.
+const HELP_FREEFORM_LINE = isAgentConfigured
+  ? 'Or type a free-form question — an LLM with my resume loaded will answer.'
+  : 'Or type a free-form question — answered from cached resume data.';
+
+function resolveResponse(key: keyof typeof RESPONSES): string[] {
+  return RESPONSES[key].map(line =>
+    line === '__FREEFORM__' ? HELP_FREEFORM_LINE : line
+  );
+}
+
 function keywordFallback(query: string): string[] {
+  // Header wording depends on *why* we are offline. When no backend is
+  // configured for this build there is nothing "unavailable" — saying so
+  // reads like a fault. Never mention the backend URL either way.
+  const header = isAgentConfigured
+    ? '[OFFLINE MODE] LLM unavailable — closest match:'
+    : '[LOCAL MODE] Answering from cached resume data — closest match:';
+
   for (const [pattern, key] of KEYWORD_FALLBACKS) {
     if (pattern.test(query)) {
-      return [
-        "[OFFLINE MODE] LLM unavailable — closest match:",
-        " ",
-        ...RESPONSES[key],
-      ];
+      return [header, " ", ...resolveResponse(key)];
     }
   }
+
   return [
-    "[OFFLINE MODE] LLM unavailable and no keyword match found.",
+    isAgentConfigured
+      ? "[OFFLINE MODE] LLM unavailable and no keyword match found."
+      : "[LOCAL MODE] No cached answer matched that question.",
     "Try 'help' for structured commands, or the PDF tab for the full resume.",
   ];
 }
@@ -141,9 +182,19 @@ export default function ChatResume() {
   }, [history, isThinking]);
 
   const askLlm = useCallback(async (question: string) => {
+    // No backend configured for this build (the usual case for the static
+    // Pages deploy). Answer locally instead of firing a request that cannot
+    // succeed — a failed fetch would surface the agent URL in the visitor's
+    // console and network panel.
+    const endpoint = agentEndpoint('/api/chat');
+    if (!endpoint) {
+      setHistory(prev => [...prev, ...keywordFallback(question), " "]);
+      return;
+    }
+
     setIsThinking(true);
     try {
-      const res = await fetch(`${AGENT_SERVER_URL}/api/chat`, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -166,8 +217,11 @@ export default function ChatResume() {
       chatHistoryRef.current.push({ role: 'user', text: question });
       chatHistoryRef.current.push({ role: 'system', text: reply });
       setHistory(prev => [...prev, ...escapeHtml(reply).split('\n'), " "]);
+      trackEvent('terminal_chat', { llm: true });
     } catch {
       setHistory(prev => [...prev, ...keywordFallback(question), " "]);
+      // Offline keyword fallback — worth knowing how often the backend misses.
+      trackEvent('terminal_chat', { llm: false });
     } finally {
       setIsThinking(false);
     }
@@ -181,12 +235,17 @@ export default function ChatResume() {
 
     if (trimmedCmd === 'clear') {
       setHistory([]);
+      trackEvent('terminal_command', { command: 'clear' });
       return;
     }
 
-    const response = RESPONSES[trimmedCmd];
+    const response = RESPONSES[trimmedCmd]
+      ? resolveResponse(trimmedCmd as keyof typeof RESPONSES)
+      : undefined;
     if (response) {
       setHistory(prev => [...prev, ...response, " "]);
+      // Only built-in command names are sent — never free-text questions.
+      trackEvent('terminal_command', { command: trimmedCmd });
     } else {
       // Free-form question → LLM backend with resume context
       void askLlm(cmd.trim());
