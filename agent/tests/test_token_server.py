@@ -33,6 +33,7 @@ def reset_rate_limits(monkeypatch):
     token_server._minute_hits.clear()
     token_server._day_hits.clear()
     token_server._global_day_hits.clear()
+    token_server._global_minute_hits.clear()
     for key, value in TEST_ENV.items():
         monkeypatch.setenv(key, value)
 
@@ -125,3 +126,49 @@ async def test_chat_rate_limit(client):
         await client.post("/api/chat", json={"message": ""})
     resp = await client.post("/api/chat", json={"message": "hello"})
     assert resp.status == 429
+
+
+async def test_chat_global_per_minute_cap(client, monkeypatch):
+    """The global per-minute cap is what protects upstream RPM quotas during a
+    concurrency spike — per-IP limits do nothing when 40 different visitors
+    arrive at once. It must trip even when no single IP is over its own budget.
+    """
+    per_ip_min, per_ip_day, global_day, global_min = token_server.RATE_LIMITS["chat"]
+    # Global cap below the per-IP cap, so only the global one can fire here.
+    monkeypatch.setitem(token_server.RATE_LIMITS, "chat", (per_ip_min, per_ip_day, global_day, 3))
+
+    for i in range(3):
+        resp = await client.post(
+            "/api/chat", json={"message": ""},
+            headers={"X-Forwarded-For": f"198.51.100.{i}"},
+        )
+        assert resp.status == 400, "distinct IPs, each well under the per-IP budget"
+
+    # A fourth distinct visitor is shed by the global cap, not by a per-IP one.
+    resp = await client.post(
+        "/api/chat", json={"message": "hello"},
+        headers={"X-Forwarded-For": "198.51.100.99"},
+    )
+    assert resp.status == 429
+    body = await resp.json()
+    # Worded as "busy", not "you misbehaved" — this visitor did nothing unusual.
+    assert "Busy" in body["error"]
+
+
+async def test_global_minute_window_recovers(client, monkeypatch):
+    per_ip_min, per_ip_day, global_day, _ = token_server.RATE_LIMITS["chat"]
+    monkeypatch.setitem(token_server.RATE_LIMITS, "chat", (per_ip_min, per_ip_day, global_day, 1))
+
+    await client.post("/api/chat", json={"message": ""},
+                      headers={"X-Forwarded-For": "203.0.113.1"})
+    resp = await client.post("/api/chat", json={"message": "hi"},
+                             headers={"X-Forwarded-For": "203.0.113.2"})
+    assert resp.status == 429
+
+    # Age the recorded hits past the 60s window rather than sleeping.
+    token_server._global_minute_hits["chat"] = [
+        t - 61 for t in token_server._global_minute_hits["chat"]
+    ]
+    resp = await client.post("/api/chat", json={"message": ""},
+                             headers={"X-Forwarded-For": "203.0.113.3"})
+    assert resp.status == 400, "window expired, requests flow again"

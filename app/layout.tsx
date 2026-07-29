@@ -1,6 +1,13 @@
-import type {Metadata} from 'next';
+import type {Metadata, Viewport} from 'next';
 import { Space_Grotesk, Instrument_Serif, JetBrains_Mono, Lora } from 'next/font/google';
-import { absoluteUrl, defaultKeywords, siteConfig } from '@/lib/site';
+import Analytics from '@/components/analytics/Analytics';
+import {
+  DEFAULT_OG_IMAGE,
+  absoluteAssetUrl,
+  absoluteUrl,
+  defaultKeywords,
+  siteConfig,
+} from '@/lib/site';
 import './globals.css';
 
 const spaceGrotesk = Space_Grotesk({
@@ -37,7 +44,6 @@ export const metadata: Metadata = {
   creator: siteConfig.name,
   publisher: siteConfig.name,
   keywords: [...defaultKeywords],
-  themeColor: '#040404',
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
@@ -52,6 +58,13 @@ export const metadata: Metadata = {
   },
   alternates: {
     canonical: absoluteUrl('/'),
+    types: {
+      'application/rss+xml': absoluteAssetUrl('/feed.xml'),
+      'application/feed+json': absoluteAssetUrl('/feed.json'),
+    },
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
   },
   openGraph: {
     type: 'website',
@@ -60,11 +73,20 @@ export const metadata: Metadata = {
     title: siteConfig.defaultTitle,
     description: siteConfig.description,
     siteName: siteConfig.defaultTitle,
+    images: [
+      {
+        url: absoluteAssetUrl(DEFAULT_OG_IMAGE),
+        width: 1200,
+        height: 630,
+        alt: siteConfig.defaultTitle,
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: siteConfig.defaultTitle,
     description: siteConfig.description,
+    images: [absoluteAssetUrl(DEFAULT_OG_IMAGE)],
   },
   robots: {
     index: true,
@@ -79,6 +101,11 @@ export const metadata: Metadata = {
   },
 };
 
+// themeColor belongs on the viewport export, not metadata (Next 15+).
+export const viewport: Viewport = {
+  themeColor: '#040404',
+};
+
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${instrumentSerif.variable} ${lora.variable} ${jetbrainsMono.variable}`}>
@@ -86,6 +113,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         <div className="mx-auto w-full max-w-7xl px-6 md:px-12 lg:px-24">
           {children}
         </div>
+        <Analytics />
       </body>
     </html>
   );

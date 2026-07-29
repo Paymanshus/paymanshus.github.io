@@ -1,11 +1,13 @@
 ---
 title: "Austere Neon: Designing for Focus"
-excerpt: "Why minimalism is not enough, and how negative space governs attention."
+excerpt: "Argues that visual minimalism alone is not enough for focus, and explains how grid discipline, restrained color, and purposeful type create it."
 date: "2026-03-01"
 tags:
-  - design
-  - interface
-  - product
+  - design systems
+  - minimalism
+  - typography
+  - visual design
+published: false
 ---
 
 The modern web is loud. It demands attention through motion, color, and density. True focus requires the opposite: an environment that strips away the non-essential until only the core message remains.

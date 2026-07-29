@@ -175,3 +175,61 @@
     transform: perspective(1050px) rotateX(70deg) scale(1.55);
   }
 }
+
+/* Inline SVG figures and tables inside blog posts. Figures sit in a bordered
+   surface panel matching the site's frame language; the SVGs themselves carry
+   their own palette and scale down with the measure. */
+.thought-post-content .post-figure {
+  margin-inline: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.thought-post-content .post-figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.thought-post-content .post-figure figcaption {
+  border-top: 1px solid var(--color-border);
+  padding: 0.85rem 1.1rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+}
+
+.thought-post-content table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 0.82rem;
+}
+
+.thought-post-content th,
+.thought-post-content td {
+  border: 1px solid var(--color-border);
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.thought-post-content th {
+  background: rgb(255 255 255 / 0.03);
+  color: var(--color-text-primary);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.thought-post-content blockquote {
+  border-left: 2px solid rgb(255 42 42 / 0.5);
+  padding-left: 1.1rem;
+  color: rgb(245 245 245 / 0.75);
+  font-style: italic;
+}

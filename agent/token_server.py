@@ -31,6 +31,10 @@ from livekit import api
 
 from observability import get_langfuse, trace_attributes
 import observability
+import llm_models
+import llm_context
+import llm_ladder
+from prompts import TERMINAL_PERSONA_BODY
 
 logger = logging.getLogger("token-server")
 
@@ -45,17 +49,36 @@ ALLOWED_ORIGINS = [
 ]
 
 # ─── Rate limiting (in-memory; resets on process restart) ──────────
-# Per-IP sliding windows + a global daily cap as a cost backstop.
+# Per-IP sliding windows, plus GLOBAL per-minute and per-day caps.
+#
+# The global PER-MINUTE cap is the one that protects upstream RPM quotas during a
+# concurrency spike — per-IP limits do nothing when 40 different visitors arrive
+# at once. Without it, a spike saturates Gemini's free RPM in seconds.
+#
+# The global PER-DAY caps are cost backstops, and the chat one is deliberately
+# generous now: a fully-paid day at these limits is ~$1.20 on DeepSeek-V4-Flash
+# pricing, and the real hard ceiling has moved to the OpenRouter provisioning
+# key's monthly `limit` (see agent/RUN.md), which — unlike these counters —
+# survives a restart. The token cap stays at 300/day because it bounds Cartesia
+# TTS and LiveKit minutes, which genuinely are the expensive part (~$0.10 per
+# voice session vs ~$0.003 of LLM).
+#
+# Known limitation: per-IP limiting is weak behind CGNAT, and a lot of Indian
+# mobile traffic shares egress IPs, so on a spike day several genuine visitors
+# can share one IP's minute budget. The 429 is friendly and the terminal degrades
+# to its keyword fallback, so this is accepted rather than solved — but don't
+# tighten the per-IP numbers without weighing it.
 
 RATE_LIMITS = {
-    # endpoint: (per-ip per-minute, per-ip per-day, global per-day)
-    "token": (6, 30, 300),
-    "chat": (10, 60, 1000),
+    # endpoint: (per-ip per-minute, per-ip per-day, global per-day, global per-minute)
+    "token": (6, 30, 300, 20),
+    "chat": (10, 100, 3000, 60),
 }
 
 _minute_hits: dict[str, list[float]] = defaultdict(list)
 _day_hits: dict[str, list[float]] = defaultdict(list)
 _global_day_hits: dict[str, list[float]] = defaultdict(list)
+_global_minute_hits: dict[str, list[float]] = defaultdict(list)
 
 
 def _client_ip(request: web.Request) -> str:
@@ -68,7 +91,7 @@ def _client_ip(request: web.Request) -> str:
 
 def _check_rate_limit(request: web.Request, endpoint: str) -> str | None:
     """Returns an error string if rate-limited, else None."""
-    per_min, per_day, global_day = RATE_LIMITS[endpoint]
+    per_min, per_day, global_day, global_min = RATE_LIMITS[endpoint]
     ip = _client_ip(request)
     now = time.time()
     minute_key = f"{endpoint}:{ip}"
@@ -77,17 +100,23 @@ def _check_rate_limit(request: web.Request, endpoint: str) -> str | None:
     _minute_hits[minute_key] = [t for t in _minute_hits[minute_key] if now - t < 60]
     _day_hits[day_key] = [t for t in _day_hits[day_key] if now - t < 86400]
     _global_day_hits[endpoint] = [t for t in _global_day_hits[endpoint] if now - t < 86400]
+    _global_minute_hits[endpoint] = [t for t in _global_minute_hits[endpoint] if now - t < 60]
 
     if len(_global_day_hits[endpoint]) >= global_day:
         return "Daily capacity reached. Please try again tomorrow."
     if len(_day_hits[day_key]) >= per_day:
         return "Daily limit reached for your connection. Try again tomorrow."
+    if len(_global_minute_hits[endpoint]) >= global_min:
+        # Load shedding during a spike. Deliberately worded as "busy" rather than
+        # "you did something wrong" — this visitor did nothing unusual.
+        return "Busy right now — lots of visitors. Try again in a few seconds."
     if len(_minute_hits[minute_key]) >= per_min:
         return "Slow down a little — too many requests. Try again in a minute."
 
     _minute_hits[minute_key].append(now)
     _day_hits[day_key].append(now)
     _global_day_hits[endpoint].append(now)
+    _global_minute_hits[endpoint].append(now)
     return None
 
 
@@ -101,6 +130,10 @@ def _cors_headers(request: web.Request) -> dict[str, str]:
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
         "Access-Control-Max-Age": "3600",
+        # Chrome Local Network Access: lets the public HTTPS site call this
+        # server when it runs on the visitor's own machine (owner demo mode).
+        # Harmless for the normal fly.io deployment.
+        "Access-Control-Allow-Private-Network": "true",
     }
 
 
@@ -169,34 +202,12 @@ async def generate_token(request: web.Request) -> web.Response:
 
 
 # ─── /api/chat — terminal LLM ───────────────────────────────────────
-
-TERMINAL_PERSONA = """\
-You are the terminal interface of Paymanshu Sharma's portfolio site, answering
-as Paymanshu in first person. You are a Machine Learning Engineer at Maersk,
-Bangalore. Answer questions about your experience, skills, projects, and
-education using ONLY the resume context provided below. Be terse: 1-3 short
-lines max (this renders in a terminal), plain text only: no markdown, no emoji.
-If the context doesn't cover the question, say so honestly in one line and
-suggest the voice mode or the PDF resume. Never invent facts.
-
-RESUME CONTEXT:
-{context}
-"""
+# Model selection, fallback and the quota breaker all live in llm_ladder; the
+# persona lives in prompts; the prompt layout lives in llm_context. This module
+# only does HTTP, rate limiting and tracing.
 
 MAX_MESSAGE_CHARS = 500
 MAX_HISTORY_TURNS = 6
-
-GENERATION_CONFIG = {"max_output_tokens": 200, "temperature": 0.6}
-
-_genai_client = None
-
-
-def _get_genai_client():
-    global _genai_client
-    if _genai_client is None:
-        from google import genai
-        _genai_client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
-    return _genai_client
 
 
 def _visitor_id(ip: str) -> str:
@@ -204,58 +215,69 @@ def _visitor_id(ip: str) -> str:
     return "visitor-" + hashlib.sha256(ip.encode()).hexdigest()[:12]
 
 
-async def _generate_reply(
-    models: list[str], contents: list[dict], system_instruction: str
-) -> tuple[str, str | None]:
-    """Try each Gemini model in order; returns (reply, model_used).
+def _record_attempt(ctx, entry, outcome) -> None:
+    """Record one ladder attempt as a Langfuse generation.
 
-    When Langfuse is enabled, each attempt is recorded as a generation
-    (prompt, output, token usage → cost); failed attempts are ERROR-level
-    generations so the fallback chain is visible per trace.
+    Called once per attempted entry so the whole fallback walk is visible in a
+    single trace — a failed Gemini attempt followed by an OpenRouter success
+    shows as two generations, the first ERROR-level.
+
+    Kept here rather than in llm_ladder so the ladder has no Langfuse dependency
+    and stays importable from scripts/.
     """
     langfuse = get_langfuse()
-    for model in dict.fromkeys(models):
-        gen = None
-        if langfuse is not None:
-            try:
-                gen = langfuse.start_observation(
-                    as_type="generation",
-                    name=f"gemini:{model}",
-                    model=model,
-                    input={
-                        "system_instruction": system_instruction,
-                        "contents": contents,
-                    },
-                    model_parameters=dict(GENERATION_CONFIG),
-                )
-            except Exception as e:
-                logger.warning("Langfuse generation start failed: %s", e)
-        try:
-            client = _get_genai_client()
-            response = await client.aio.models.generate_content(
-                model=model,
-                contents=contents,
-                config={"system_instruction": system_instruction, **GENERATION_CONFIG},
+    if langfuse is None:
+        return
+    try:
+        is_error = isinstance(outcome, llm_ladder.LLMError)
+        gen = langfuse.start_observation(
+            as_type="generation",
+            name=entry.label,
+            model=(entry.model if is_error else (outcome.resolved_model or entry.model)),
+            input={"system": ctx.system, "turns": ctx.turns},
+            model_parameters={
+                "max_output_tokens": llm_models.TERMINAL_MAX_OUTPUT_TOKENS,
+                "temperature": llm_models.TERMINAL_TEMPERATURE,
+                "context_mode": ctx.mode,
+            },
+        )
+        if is_error:
+            gen.update(level="ERROR", status_message=f"{outcome.kind}: {outcome.message}"[:500])
+        else:
+            gen.update(
+                output=outcome.text,
+                usage_details={
+                    "input": outcome.prompt_tokens,
+                    "output": outcome.completion_tokens,
+                    # Cached reads are billed at a fraction of the input rate, so
+                    # surfacing them separately keeps Langfuse's cost estimate honest.
+                    "cache_read_input_tokens": outcome.cached_tokens,
+                },
+                # Real cost from the provider beats our hardcoded price table,
+                # which can only ever be right for direct Gemini calls.
+                cost_details=({"total": outcome.cost} if outcome.cost is not None else None),
+                metadata={"latency_ms": round(outcome.total_ms, 1)},
             )
-            reply = (response.text or "").strip()
-            if gen is not None:
-                usage = getattr(response, "usage_metadata", None)
-                usage_details = None
-                if usage is not None:
-                    usage_details = {
-                        "input": getattr(usage, "prompt_token_count", 0) or 0,
-                        "output": getattr(usage, "candidates_token_count", 0) or 0,
-                    }
-                gen.update(output=reply, usage_details=usage_details)
-                gen.end()
-            if reply:
-                return reply, model
-        except Exception as e:
-            logger.warning("Chat LLM %s failed: %s", model, e)
-            if gen is not None:
-                gen.update(level="ERROR", status_message=str(e)[:500])
-                gen.end()
-    return "", None
+        gen.end()
+    except Exception as e:
+        logger.warning("Langfuse generation record failed: %s", e)
+
+
+async def _generate_reply(ctx, *, session_id: str | None = None) -> tuple[str, str | None]:
+    """Walk the terminal ladder. Returns (reply, model_used); ("", None) on
+    exhaustion, which the caller turns into 503 llm_unavailable."""
+    result = await llm_ladder.generate(
+        ctx,
+        ladder=llm_models.LLM_LADDER,
+        surface="terminal",
+        max_tokens=llm_models.TERMINAL_MAX_OUTPUT_TOKENS,
+        temperature=llm_models.TERMINAL_TEMPERATURE,
+        session_id=session_id,
+        on_attempt=lambda entry, outcome: _record_attempt(ctx, entry, outcome),
+    )
+    if result is None:
+        return "", None
+    return result.text, (result.resolved_model or result.entry_label)
 
 
 async def chat(request: web.Request) -> web.Response:
@@ -276,54 +298,47 @@ async def chat(request: web.Request) -> web.Response:
         history = []
     history = history[-MAX_HISTORY_TURNS:]
 
-    # Ground the answer with BM25 sections for the query
     from resume_context import get_resume_index
-    context = get_resume_index().search(message, top_k=3)
 
-    contents = []
-    for turn in history:
-        role = "user" if turn.get("role") == "user" else "model"
-        text = str(turn.get("text", ""))[:MAX_MESSAGE_CHARS]
-        if text:
-            contents.append({"role": role, "parts": [{"text": text}]})
-    contents.append({"role": "user", "parts": [{"text": message}]})
+    # Where the resume goes (system prefix vs user turn) is the active context
+    # mode's decision — it determines whether the prompt prefix is cacheable.
+    # See llm_context and tests/eval_context_modes.py.
+    ctx = llm_context.build(
+        message, history,
+        persona_body=TERMINAL_PERSONA_BODY,
+        index=get_resume_index(),
+        max_chars=MAX_MESSAGE_CHARS,
+    )
 
-    # Primary model first; free-tier capacity blips (503s) and silent model
-    # sunsets (404s — 2.5-flash/-lite died in mid-2026) are common, so fall
-    # through the chain before telling the frontend to go keyword-only.
-    # `gemini-flash-lite-latest` is Google's rolling alias — it survives
-    # sunsets. Availability probe: python tests/probe_gemini.py
-    models = [
-        os.environ.get("TERMINAL_LLM_MODEL", "gemini-3.1-flash-lite"),
-        "gemini-flash-lite-latest",
-        "gemini-3.5-flash",
-    ]
-    system_instruction = TERMINAL_PERSONA.format(context=context)
+    visitor = _visitor_id(_client_ip(request))
+    # Doubles as OpenRouter's sticky-routing key, which keeps a returning visitor
+    # on the provider holding their cached prefix.
+    session_id = f"terminal-{visitor}-{time.strftime('%Y%m%d')}"
 
     langfuse = get_langfuse()
     if langfuse is not None:
         # One Langfuse trace per request; the visitor is a pseudonymous hash
         # of the client IP, sessions bucket a visitor's messages by day.
-        visitor = _visitor_id(_client_ip(request))
         with langfuse.start_as_current_observation(name="terminal-chat") as span:
             with trace_attributes(
                 user_id=visitor,
-                session_id=f"terminal-{visitor}-{time.strftime('%Y%m%d')}",
+                session_id=session_id,
                 tags=["terminal"],
             ):
-                reply, model_used = await _generate_reply(
-                    models, contents, system_instruction
-                )
+                reply, model_used = await _generate_reply(ctx, session_id=session_id)
                 span.update(
                     input={"message": message, "history_turns": len(history)},
                     output=reply or "(llm_unavailable)",
                     metadata={
                         "model_used": model_used,
-                        "context_chars": len(context),
+                        "context_mode": ctx.mode,
+                        "prefix_chars": len(ctx.system),
+                        "bm25_score": round(ctx.bm25_score, 2),
+                        "breaker": llm_ladder.breaker.snapshot(),
                     },
                 )
     else:
-        reply, model_used = await _generate_reply(models, contents, system_instruction)
+        reply, model_used = await _generate_reply(ctx, session_id=session_id)
 
     if not reply:
         # Signal the frontend to use its local keyword fallback

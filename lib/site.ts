@@ -52,6 +52,16 @@ export function absoluteUrl(path = '/') {
 // Stable node ids for the site-wide JSON-LD entity graph. Every page that
 // mentions the person/site must reference these via {'@id': ...} instead of
 // re-declaring its own Person copy, so crawlers reconcile a single entity.
+/**
+ * Absolute URL for a static file. Unlike absoluteUrl(), it does NOT append a
+ * trailing slash — routes get one (trailingSlash: true), files must not.
+ */
+export function absoluteAssetUrl(filePath: string) {
+  return new URL(filePath.replace(/^\/+/, ''), siteConfig.url).toString();
+}
+
+export const DEFAULT_OG_IMAGE = '/og/default.png';
+
 export const PERSON_ID = `${siteConfig.url}/#person`;
 export const WEBSITE_ID = `${siteConfig.url}/#website`;
 
@@ -148,7 +158,15 @@ export function createMetadata({
   ogImage,
 }: SeoInput): Metadata {
   const fullTitle = `${title} | ${siteConfig.name}`;
-  const images = ogImage ? [absoluteUrl(ogImage)] : undefined;
+  // Cards are rendered at build time by scripts/generate-og-images.mjs.
+  const images = [
+    {
+      url: absoluteAssetUrl(ogImage ?? DEFAULT_OG_IMAGE),
+      width: 1200,
+      height: 630,
+      alt: fullTitle,
+    },
+  ];
 
   return {
     title,

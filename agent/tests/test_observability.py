@@ -15,6 +15,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import observability
 import token_server
+import llm_context
+import llm_ladder
+import llm_models
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +30,15 @@ def reset_observability(monkeypatch):
     yield
     observability._client = None
     observability._client_failed = False
+
+
+@pytest.fixture(autouse=True)
+def reset_breaker():
+    """The breaker is process-global by design, so it must be reset between
+    tests or a lock from one leaks into the next."""
+    llm_ladder.breaker.clear()
+    yield
+    llm_ladder.breaker.clear()
 
 
 # ─── Env gating ─────────────────────────────────────────────────────
@@ -78,58 +90,74 @@ async def test_estimate_costs_env_override(monkeypatch):
 
 
 # ─── Chat pipeline without Langfuse ─────────────────────────────────
+# _generate_reply now delegates model choice and fallback to llm_ladder, so these
+# fake the ladder's single call site rather than the Gemini client. The
+# behaviours asserted are unchanged: first entry wins, failures fall through,
+# exhaustion returns ("", None) → 503 llm_unavailable.
 
-class _FakeResponse:
-    text = "hello from fake model"
-    usage_metadata = None
+TEST_LADDER = (
+    llm_models.parse_entry("gemini:model-a"),
+    llm_models.parse_entry("gemini:model-b"),
+)
 
 
-def _fake_client(fail_models=()):
+def _ctx(text="hi"):
+    return llm_context.BuiltContext(
+        mode="full_hint", system="sys", turns=[{"role": "user", "text": text}]
+    )
+
+
+def _fake_ladder(monkeypatch, fail_models=()):
+    """Patch llm_ladder.call_entry and return the list of models actually hit."""
     calls = []
 
-    class _Models:
-        async def generate_content(self, *, model, contents, config):
-            calls.append(model)
-            if model in fail_models:
-                raise RuntimeError("503 capacity")
-            return _FakeResponse()
+    async def call_entry(entry, ctx, **kwargs):
+        calls.append(entry.model)
+        if entry.model in fail_models:
+            raise llm_ladder.LLMError(llm_ladder.KIND_SERVER, "503 capacity")
+        return llm_ladder.LLMResult(
+            text="hello from fake model",
+            entry_label=entry.label,
+            resolved_model=entry.model,
+            prompt_tokens=10,
+            completion_tokens=5,
+        )
 
-    class _Aio:
-        models = _Models()
-
-    class _Client:
-        aio = _Aio()
-
-    return _Client(), calls
+    monkeypatch.setattr(llm_ladder, "call_entry", call_entry)
+    monkeypatch.setattr(llm_models, "LLM_LADDER", TEST_LADDER)
+    return calls
 
 
 async def test_generate_reply_without_langfuse(monkeypatch):
-    client, calls = _fake_client()
-    monkeypatch.setattr(token_server, "_get_genai_client", lambda: client)
-    reply, model = await token_server._generate_reply(
-        ["model-a", "model-b"], [{"role": "user", "parts": [{"text": "hi"}]}], "sys"
-    )
+    calls = _fake_ladder(monkeypatch)
+    reply, model = await token_server._generate_reply(_ctx())
     assert reply == "hello from fake model"
     assert model == "model-a"
-    assert calls == ["model-a"]
+    assert calls == ["model-a"], "a healthy first entry must not touch the rest"
 
 
 async def test_generate_reply_falls_back_on_error(monkeypatch):
-    client, calls = _fake_client(fail_models={"model-a"})
-    monkeypatch.setattr(token_server, "_get_genai_client", lambda: client)
-    reply, model = await token_server._generate_reply(
-        ["model-a", "model-a", "model-b"], [], "sys"
-    )
+    calls = _fake_ladder(monkeypatch, fail_models={"model-a"})
+    reply, model = await token_server._generate_reply(_ctx())
     assert reply == "hello from fake model"
     assert model == "model-b"
-    # dict.fromkeys dedupes the chain: model-a tried once, then model-b
     assert calls == ["model-a", "model-b"]
 
 
+async def test_generate_reply_skips_locked_entry(monkeypatch):
+    """The spike behaviour: once model-a has failed, the NEXT request must not
+    pay a network call to rediscover it."""
+    calls = _fake_ladder(monkeypatch, fail_models={"model-a"})
+    await token_server._generate_reply(_ctx())
+    calls.clear()
+    reply, model = await token_server._generate_reply(_ctx())
+    assert reply == "hello from fake model"
+    assert calls == ["model-b"], "model-a is locked and must be skipped entirely"
+
+
 async def test_generate_reply_all_fail(monkeypatch):
-    client, _ = _fake_client(fail_models={"model-a", "model-b"})
-    monkeypatch.setattr(token_server, "_get_genai_client", lambda: client)
-    reply, model = await token_server._generate_reply(["model-a", "model-b"], [], "sys")
+    _fake_ladder(monkeypatch, fail_models={"model-a", "model-b"})
+    reply, model = await token_server._generate_reply(_ctx())
     assert reply == ""
     assert model is None
 

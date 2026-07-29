@@ -1,9 +1,11 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileText, Terminal, Mic } from 'lucide-react';
+import { sectionTimer, trackEvent } from '@/lib/analytics';
+import { useSectionView } from '@/hooks/useSectionView';
 
 type ResumeMode = 'pdf' | 'chat' | 'voice';
 
@@ -35,12 +37,28 @@ const VoiceResume = dynamic(() => import('./resume/VoiceResume'), {
 export default function ExperienceSection() {
   const [mode, setMode] = useState<ResumeMode>('chat');
   const [isPending, startTransition] = useTransition();
+  const sectionRef = useSectionView<HTMLDivElement>('experience');
+
+  // One timer section per resume mode, so "time in voice" is separable from
+  // "time on /experience". Only the active mode's clock runs.
+  useEffect(() => {
+    const section = `resume:${mode}`;
+    sectionTimer.start(section);
+    return () => sectionTimer.stop(section);
+  }, [mode]);
+
+  const selectMode = (next: ResumeMode) => {
+    if (next !== mode) {
+      trackEvent('resume_mode_change', { mode: next });
+    }
+    startTransition(() => setMode(next));
+  };
 
   return (
-    <div className="flex h-full min-h-[80vh] w-full flex-col">
+    <div ref={sectionRef} className="flex h-full min-h-[80vh] w-full flex-col">
       <div className="mb-12 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-4xl font-light tracking-tight mb-2">Experience</h2>
+          <h1 className="text-4xl font-light tracking-tight mb-2">Experience</h1>
           <p className="text-brand-red font-mono text-xs tracking-widest uppercase">{'// Select Interface Mode'}</p>
         </div>
         
@@ -49,7 +67,7 @@ export default function ExperienceSection() {
           {(['pdf', 'chat', 'voice'] as ResumeMode[]).map((m) => (
             <button
               key={m}
-              onClick={() => startTransition(() => setMode(m))}
+              onClick={() => selectMode(m)}
               className={`relative px-6 py-2 rounded-full text-xs font-mono uppercase tracking-widest transition-colors duration-300 z-10 flex items-center gap-2 ${
                 mode === m ? 'text-bg' : 'text-text-secondary hover:text-text-primary'
               }`}

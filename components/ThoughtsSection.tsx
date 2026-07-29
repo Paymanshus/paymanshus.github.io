@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import type { BlogPostPreview } from '@/lib/blog';
+import PageEngagement from '@/components/analytics/PageEngagement';
 
 export default function ThoughtsSection({ posts }: { posts: BlogPostPreview[] }) {
   return (
     <div className="relative min-h-[80vh] w-full">
+      <PageEngagement section="thoughts_index" />
       <div className="mx-auto max-w-4xl">
         <header className="mb-16">
           <h1 className="mb-4 text-4xl font-light tracking-tight">Thoughts</h1>

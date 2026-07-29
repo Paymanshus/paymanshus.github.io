@@ -1,0 +1,283 @@
+---
+title: "Large Language Model Optimization: Memory, GPU, and CPU"
+excerpt: "A practical tour of LLM deployment optimization across three dimensions — precision formats and quantization for memory, batching and KV caching for GPU, and IPEX and llama.cpp for CPU."
+date: "2024-12-14"
+tags:
+  - llm optimization
+  - quantization
+  - precision
+  - kv cache
+  - inference
+  - gpu
+---
+
+_Written in 2024, and it shows. This predates the now-standard tooling and formats — vLLM's PagedAttention, FP8 and FP4 hardware support, GGUF's takeover from GGML, and the current generation of quantization methods (AWQ, GPTQ variants, MXFP4). The fundamentals below — why precision matters, how quantization trades accuracy for memory, where the KV cache bottleneck comes from — still hold. The specific library recommendations and benchmark numbers do not. Read it as a snapshot._
+
+## Introduction
+
+In today's rapidly evolving digital landscape, natural language processing (NLP) has emerged as a transformative technology, revolutionizing how machines understand and interpret human language. Foundation models serve as the backbone enabling many cutting-edge AI systems to understand and generate human language, which have become indispensable in powering a wide array of applications — from chatbots and sentiment analysis to machine translation and content generation. LLMs are instrumental in enhancing customer engagement, streamlining operations, and fostering innovation across various sectors such as healthcare, finance, insurance, and more.
+
+However, the increasing demand for sophisticated, context-aware language understanding shows the complexities and challenges associated with training and deploying these models. The significant computational resources and the necessity for efficient optimization algorithms underscore the unique challenges organizations face. As LLMs grow in complexity, incorporating multiple layers and components like transformers and attention mechanisms, the task of managing computational costs, resource limitations, potential biases, and energy consumption becomes paramount. Such ever growing complexities spurred a pressing need for optimization strategies that not only improve model accuracy and effectiveness but also ensure scalability, efficiency, and responsible AI development.
+
+This piece explores the multifaceted domain of LLM optimization, presenting state-of-the-art techniques, emerging trends, and best practices to enhance the performance and utility of these models by delving into aspects such as data preprocessing, model architecture choices, transfer learning, and fine-tuning, alongside strategies for model compression and reducing energy consumption.
+
+## Why the Need for LLM Optimization?
+
+The five priority painful challenges in deploying LLMs are:
+
+- **Memory (RAM) Constraints:** LLMs require a substantial amount of RAM to load the model into memory. For deployment on servers or edge devices, ensuring that there is enough RAM to accommodate the model can be a challenge.
+- **Resource (GPU and CPU) utilization:** Large language models require a lot of computation for training and inference. Optimized processing is essential to make the best use of resources, especially when the model must deal with multiple requests at the same time.
+- **Latency and Throughput:** Real-time applications require high performance and low delay. Designing the deployment architecture to cope with many simultaneous requests effectively can be increasingly onerous.
+- **Parameter Redundancy:** Redundant parameters present in pre-trained language models pose challenges for specific deployment scenarios. Fine-tuning or compressing the model to reduce its size without significantly sacrificing performance can be a complex task.
+- **Energy Efficiency:** Deploying large language models on edge devices, where power constraints are prevalent, requires consideration of energy efficiency. Optimizing the model architecture and inference process for low power consumption is important for superlative performance.
+
+## Optimization Strategies
+
+The optimization of LLM deployment encompasses three primary dimensions: memory utilization, CPU efficiency, and GPU acceleration. These dimensions represent critical facets in the efficient deployment of Large Language Models, each demanding meticulous attention to achieve optimal performance and scalability. This section delineates some strategies tailored to optimize LLM deployment across these three dimensions, elucidating nuanced approaches to memory management, CPU utilization, and GPU acceleration.
+
+Optimizing memory usage is a critical aspect of deploying LLMs effectively. State-of-the-art models, which are prominent in natural language understanding and generation, often come with substantial memory requirements which can pose challenges in deployment scenarios. However, with strategic memory optimization techniques, the efficiency and scalability of LLM deployment can be improved.
+
+Optimizing CPU usage is paramount when deploying LLMs to ensure efficient performance and scalability. While LLMs excel in processing vast amounts of textual data, their computational demands can strain CPUs, leading to potential bottlenecks and reduced efficiency. However, with strategic CPU optimization techniques, organizations can unlock the full potential of LLM deployment without overwhelming the hardware infrastructure.
+
+Optimizing GPU utilization is another crucial step to consider when deploying LLMs. They often rely on parallel processing to handle the massive computational demands of natural language processing tasks. GPUs, because of parallel architecture and high processing power, are well-suited for accelerating LLM inference and training. However, to fully leverage the capabilities of GPUs and ensure efficient deployment of LLMs, it's essential to employ optimization techniques tailored to GPU architectures.
+
+The sections below deep dive into key strategies, ranging from parameter quantization to model pruning for memory, and batch processing, mixed-precision computing, and model parallelism for GPU.
+
+## Memory
+
+With bigger, state of the art achieving models being put out at an ever increasingly rapid pace nowadays, it is getting harder for practitioners to work on the cutting edge and spend hands-on time. Besides CPU processing being a bottleneck, and massive GPU access costs, another obstacle that comes in the way of experimenting with larger models is being able to store these models in the available memory at all. Traditionally, model weights have been stored as floats in the 32-bit format, also referred to as single precision. This format is known to be able to learn and manage the most amount of information possible. But despite the format's competence at storing significant amounts of information, the very same advantage presents a challenge as well. Massive information storage is a computational issue and makes it difficult to work with in machines which cannot store such blocks of information at a time.
+
+Just to demonstrate the sizes that are being dealt with here, model size in bytes can be calculated as the number of parameters, multiplied by the precision size of choice in bytes:
+
+```
+Model size (bytes) = No. of Params * Precision Size (bytes)
+```
+
+Llama 2 7B is a useful reference point here, both because it is the smallest model in a lineup most practitioners have actually run, and because it is the model benchmarked later in this piece. Running that calculation across the precisions we care about:
+
+| Precision | Bytes/param | Weights alone |
+|---|---|---|
+| fp32 (single) | 4 | ~28 GB |
+| fp16 / bf16 (half) | 2 | ~14 GB |
+| int8 | 1 | ~7 GB |
+| int4 | 0.5 | ~3.5 GB |
+
+The fp32 row is the problem in miniature. 28 GB of weights puts the *smallest* Llama 2 model beyond a 24 GB consumer card before a single token of context is allocated — and the KV cache discussed later adds to that. Halving the precision halves the bill, which is why the practical default settled on 16-bit long before quantization entered the picture.
+
+The prospect of fitting larger models with limited compute made researchers in the area start asking the question — how much information out of what we initially store do we really need to have a model work at its full potential? Is there some part that we can do without, and in the process end up saving ourselves compute resources to direct elsewhere? Further academic explorations began to shed some light on this very hypothesis. Lower precision formats were tried out and found to demonstrate very reasonable performance applied across a variety of model types.
+
+16-bit float representations have been extensively experimented with over time to try and find the option that could handle the widest applicable range of values expected in regular computation. Also called half-precision due to its nature of storing information with half the available number of bits, the recent standardized versions of the format have showed decent capability for learning tasks besides the reduced storage requirement.
+
+In the conventional full precision, 1 bit refers to the sign of the float value, 8 are reserved for the exponent part, while the remaining 23 represent the mantissa, or the significand values of the floating point. This allows for the 32-bit format to represent the range -1e⁻³⁸ to 3e³⁸.
+
+Half-precision, on the other hand, does away with 16 of the bits from the previous case and only has half of the storage memory to work with to accommodate the available bits differently. Here, 5 bits are assigned to the exponent representation, and 10 are for the mantissa, according to the latest IEEE 754 standard. The same 1 bit is used to represent the sign, which is maintained across all signed numeric representation formats. While the representable range with this 16-bit floating point format falls down to -6e⁻⁸ to 65504, this was found to be sufficient for several modeling tasks.
+
+Seeing the potential in alternate precision formats, however, new formats began to be devised to tackle drawbacks in the existing ones. One such example is the popular bfloat16, or the Brain floating point format developed by Google Brain. While maintaining the same 16 bits as the memory space for byte representation, bfloat16 distributes its stock differently from how half precision does it. Here, 8 bits are assigned to the exponent, the same as what is found in the 32-bit representation. A reduced 7 bits are now used for the decimal point representation. This allows it to represent a wider range of numbers, i.e., from -1e⁻³⁸ to 3e³⁸, the same as what the 8 bits of exponent reservation in the single precision offers. The drawback is the precision up to which we can maintain for the floating point representation, which is less precise in this case. The big advantage of the greater range of representation is also that it prevents underflow and overflow.
+
+<figure class="post-figure">
+<svg viewBox="0 0 760 250" role="img" aria-label="Bit layout comparison of FP32, FP16 and BF16. FP32 uses 1 sign bit, 8 exponent bits and 23 mantissa bits. FP16 uses 1 sign, 5 exponent and 10 mantissa bits. BF16 uses 1 sign, 8 exponent and 7 mantissa bits, matching FP32's exponent width in half the total space.">
+  <rect width="760" height="250" fill="#0a0a0a"/>
+  <g font-family="ui-monospace, monospace" font-size="11">
+    <text x="20" y="26" fill="#8a8a8a" letter-spacing="1.6">BIT ALLOCATION — 1 SIGN / EXPONENT / MANTISSA</text>
+    <text x="20" y="72" fill="#f5f5f5" font-size="12">FP32</text>
+    <rect x="88" y="58" width="18" height="30" fill="#2e2e2e" stroke="#1a1a1a"/>
+    <rect x="106" y="58" width="150" height="30" fill="#ff2a2a" opacity="0.85"/>
+    <rect x="256" y="58" width="431" height="30" fill="#242424" stroke="#1a1a1a"/>
+    <text x="112" y="78" fill="#0a0a0a" font-size="10" font-weight="700">8 exp</text>
+    <text x="262" y="78" fill="#8a8a8a" font-size="10">23 mantissa</text>
+    <text x="700" y="78" fill="#8a8a8a" font-size="10">32 bits</text>
+    <text x="20" y="132" fill="#f5f5f5" font-size="12">FP16</text>
+    <rect x="88" y="118" width="18" height="30" fill="#2e2e2e" stroke="#1a1a1a"/>
+    <rect x="106" y="118" width="94" height="30" fill="#ff2a2a" opacity="0.45"/>
+    <rect x="200" y="118" width="188" height="30" fill="#242424" stroke="#1a1a1a"/>
+    <text x="112" y="138" fill="#f5f5f5" font-size="10" font-weight="700">5 exp</text>
+    <text x="206" y="138" fill="#8a8a8a" font-size="10">10 mantissa</text>
+    <text x="700" y="138" fill="#8a8a8a" font-size="10">16 bits</text>
+    <text x="20" y="192" fill="#f5f5f5" font-size="12">BF16</text>
+    <rect x="88" y="178" width="18" height="30" fill="#2e2e2e" stroke="#1a1a1a"/>
+    <rect x="106" y="178" width="150" height="30" fill="#ff2a2a" opacity="0.85"/>
+    <rect x="256" y="178" width="132" height="30" fill="#242424" stroke="#1a1a1a"/>
+    <text x="112" y="198" fill="#0a0a0a" font-size="10" font-weight="700">8 exp</text>
+    <text x="262" y="198" fill="#8a8a8a" font-size="10">7 mant</text>
+    <text x="700" y="198" fill="#8a8a8a" font-size="10">16 bits</text>
+    <line x1="256" y1="52" x2="256" y2="214" stroke="#ff2a2a" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
+    <text x="20" y="236" fill="#8a8a8a" font-size="10">BF16 keeps FP32's exponent width — same dynamic range, half the bits, paid for in mantissa precision.</text>
+  </g>
+</svg>
+<figcaption>Where the bits go. FP16 splits its budget evenly-ish; BF16 spends it almost entirely on range.</figcaption>
+</figure>
+
+- **Underflow**: Not representing very small numbers falling under the minimum of a format's representation range.
+- **Overflow**: Not representing very large numbers beyond the max of a format's representation range.
+
+These 2 phenomena lead to significant instability in the training process. Rather than the required numerical/floating point values, NaN values replace them, thus affecting further computation by later layers of a network.
+
+Other examples include Nvidia's TensorFloat 19-bit representation, AMD's fp24, and Pixar's PXR24 formats.
+
+### Understanding Quantization
+
+_The treatment of zero-point quantization and LLM.int8() in this section and the next draws heavily on Hugging Face's "A Gentle Introduction to 8-bit Matrix Multiplication" by Younes Belkada and Tim Dettmers [5], which remains the clearest explanation of the mixed-precision decomposition scheme. The framing of the scaling example below follows theirs._
+
+For going even further with potential memory saving, lower-bit representations than 16-bit cannot be used directly, as these would not be able to store the required amount of information needed to achieve sufficient performance. **Quantization** is one such technique proposed to deal with this roadblock. Rather than dropping more bits, this method relies on rounding digits from float to int representations, paired with some strategy to manage precision loss.
+
+In order to better familiarize ourselves with quantization, consider the following example. Assuming there exists data in a given range, say [-1.0, 1.0]. There may be several float values which can exist in this interval. One way of converting this range to a representation with a smaller scope would be to convert it to a fixed integer scale like [-127, 127]. For any conversion between these two scales, we would multiply a float value from the first interval by 127, which we can now call our scaling factor. This number is derived from the fact that multiplication of the max of the first range by this factor gives us the max of the new scale, while this also holds true for minimum to minimum conversion between these ranges.
+
+Now, if we take a floating point number, 0.4, and wish to convert it to the [-127, 127] range and back, it would be done as follows:
+
+1. `0.4 * 127 = 50.8 -> 51` (i.e., 50.8 is rounded up to 51 to fit with the new integer representation range)
+2. `51 / 127 = 0.4015 ≈ 0.4` to get the original value again (i.e., the scaling factor is now divided rather than multiplied to reverse the scale conversion operation)
+
+What can also be noticed here is the small errors which arise from rounding — an epsilon of 0.2 to get from 50.8 to 51, and a 0.0015 difference from the original value of 0.4 on the way back. These might seem minuscule at this moment, but these tiny values add up, with the errors propagating over the layers of a network, thus degrading model performance.
+
+Another factor to keep in mind is that not all ranges are created the same. With vectors with varying ranges, an approach based around grabbing the absolute maximum from the series and calculating the scaling or quantization factor from it is preferred. This allows for conversion to Int8 ranges and back to floating point where the original range might not be so straightforward as the one mentioned in the previous example. This might be reminiscent of min-max scaling in some ways, with one of the main differences here being that it is ensured that there is always an integer value for representing 0 in the quantized domain when quantized, while this may not be the case when scaling.
+
+Quantization can be broadly categorized into two primary types based on the stage of the pipeline at which it is performed:
+
+1. **Quantization-Aware Training (QAT)** incorporates weight quantization at training time itself. This leads to improved model performance, but at the same time can be more computationally demanding. Methods like QLoRA work in this manner, accommodating the nuances of quantization.
+2. **Post-Training Quantization (PTQ)** on the other hand performs the quantization on the weights of a model which has already been trained. This is an easier to implement solution which gives us some more flexibility to work with models that we might not have the compute to otherwise support with QAT methods, while allowing for additional memory requirement reductions. (This piece primarily covers PTQ methods.)
+
+### Improved Quantization Techniques
+
+A few further improvements have been proposed and put into practice, which are more common methods of carrying out the same concept of quantization but in more efficient ways which aid in preventing excessive performance degradation.
+
+Rather than choosing a scaling factor for each tensor independently, the **vector-wise quantization** technique suggests performing this along an entire row or column instead. This makes it much faster than individually computing scaling factors while processing each tensor separately.
+
+This is also made use of in the **LLM.int8()** method for performing int8 quantization. Besides vectorizing the quantization computation to improve efficiency, this alternative matrix multiplication method entails performance improvements over regular int8 quantization based on the concept that outlier features are primarily the ones responsible for quality degradation in the usual quantization flow. The reason for this is that while scaling down from a higher precision, the choice of the scaling factor gets too strongly influenced by vectors where there exist some extreme outlier values.
+
+LLM.int8() promises zero degradation in performance by tackling the effect of outlier features via mixed precision computation. Put simply, this means identifying values which would gain advantage from being continued to be computed at a higher precision, while the remaining significant majority is multiplied in a lower 8-bit precision. The quantized portion can later be dequantized and added to the outliers which have been computed in their original 32/16-bit float values. This also has the additional advantage of only minimal slowdowns compared to complete float16 precision inference mode.
+
+### Implementing Quantization
+
+Models downloaded from the HuggingFace Hub are widely used for the convenience due to model usage and pipeline uniformity, along with the several other features for model sharing, downloading, uploading, etc., which the Hub makes available in an open-source fashion. Another significant advantage of this now is the ease of setting up quantization quickly while fine-tuning or for inference. HuggingFace has been powered by their link-up with the bitsandbytes library, along with the availability of several useful features from Accelerate, Optimum, and other similar services from HuggingFace themselves.
+
+bitsandbytes provides a wide array of features allowing for incorporating state of the art quantization methods for quick and easy optimization. These help with saving memory while inferencing without drastic drop-offs in performance, and while maintaining throughput as well. LLM.int8() and NF4 quantization are features which exist out of the box with this library — in some cases only requiring a simple flag to be enabled for their usage (`load_in_8bit=True` is all that is needed to enable LLM.int8() quantization mode while loading a supported model from HuggingFace).
+
+Accelerate also has another important feature which splits up any given model weights between the CPU and GPU memory, in case the GPU by default is not able to hold the entire model. Setting the `device_map` parameter to `'auto'` while loading any model from pretrained is all it takes to enable Accelerate to look out for cases where this sort of splitting needs to kick in.
+
+### Results and Inferences
+
+The objective here was to compare models before and after different types of quantization methods had been applied to them, and how this impacts pertinent performance-related factors — primarily, the output performance quality (based on some chosen metric), the size of the model we are actually able to load in and use, any drops or differences in speed observed at inference time, and any other factors that arise during testing.
+
+**Memory Savings:** As expected, as per the previously described calculations for computing model size in memory, the benchmarks for model sizes that were able to be loaded in gives us a clearer picture of a more realistic setting with commonly used models. Comparing model size with GPU memory of the selected device, and then measuring how far different quantization techniques can take us in being able to move up a level and possibly run LLM tasks with a model with a "slightly" larger number of parameters, can provide a necessary perspective into the capabilities of a specified hardware setup.
+
+Considering load time and run time memory usages while accommodating for some potential delta at run time, we can see the drop off in memory requirements for the same model, such as the Llama2-7b initially requiring almost 21 GiB unquantized, something which the more commonly available T4 GPU from NVIDIA would not even be able to load in with its 16GB VRAM capacity. This very same model comes down to a mere ~5.8 GiB later in its 4-bit quantized state. Thus, given a task, with its respective dataset, and some compute power at hand, such a reference can help align what potential exists in terms of model selection.
+
+**Performance Quality:** The next essential factor to consider — will these efficiently loaded models be able to perform at the same quality as their original unquantized versions? While newer methods currently in standardized use for quantization purposes promise to be fairly optimized in terms of retaining a maximum percentage of their original learnt capacity, some performance drop-offs are still to be expected. In cases where quality is key, these may be the deciding factor of the model-quantization method combination chosen, as quantized versions of models might fail in precision tasks which they were able to do well in in their original state.
+
+Considering how the MPT model does in terms of pure performance on a structured and specific finetuned task, and how it fails to achieve a similar level of capability in its quantized state, it points towards the insight that such a model which takes up less compute to work might be beneficial in tasks which lie at the intersection of being restricted in terms of computational power but also not demanding pinpoint levels of accuracy.
+
+**Model Throughput:** With quantization techniques being applied, there can also be observed a slowdown in operating performance of these models with the additional computation occurring at intermediate stages to make operation at a lower precision possible. This can be seen in the drop-offs in tokens/second generation of the same model across quantization methods — from taking an average of 30 seconds per sample in the MMLU case to up to ~1.5 minutes. Inference speeds being an integral part of cost calculations and the quality of a real-time setup itself, both the output token length and quantization type must be considered for such cases. Batch inference cases are less affected by this and can prioritize output quality, but for real-time cases a mixture of price and performance needs to be zeroed in on.
+
+There do exist measures which can be taken to curb this slowdown, for example, with libraries like ExLlama or its newer V2 edition. These speed slowdowns are not inevitable, and resigning ourselves to not being able to pick quantized models due to insufficient throughput for inference is not the only option. Maintaining a decent output generation speed is quintessential to many real-time applications, and with this in mind, many techniques have been devised for maintaining or even improving quantized model throughput.
+
+**Model Compatibility:** In some cases, it helps to note model-specific recommendations which have been provided keeping in mind the original state of training for a particular model, and how it can be best utilized at a fine-tuning or inference stage with the correct specifications/settings. The Llama2 models, for instance, were originally trained using the bfloat16 precision, as specified by Meta. For inference, float16 is picked. However, training the model in float16 is not a recommended practice and is known to produce NaN values which will be an obstacle to successful training. This specification can be made at load time itself with HuggingFace, with the model weights being cast to the required dtype on load.
+
+## GPU Optimization
+
+In comparison to CPUs, GPUs consist of a large number of weak cores. They are a specialized set of hardware that performs one task extremely well. While CPUs are more generalized towards running other processes on the system, they are more focused towards improving the latency of a task. GPUs, however, focus on increasing the system's throughput.
+
+With the widespread incorporation of LLMs in many tasks, the demand for specialized hardware to host and run them is at an all-time high. Acquiring GPUs for running complex machine learning and deep learning algorithms has been done by large organizations for quite some time now. However, the compute power from GPUs required to run LLM inferencing is a completely different ball game. So how do we address this issue? While GPU manufacturing companies are constantly increasing the compute power and the number of floating-point operations per second, they are also extremely expensive. Constantly upgrading the hardware to keep in line with the compute power required by new algorithms might not always be the best solution as the costs also increase exponentially. This is where the challenge of GPU optimization comes in.
+
+_The batching and KV-cache material below follows the ground covered in NVIDIA's "Mastering LLM Techniques: Inference Optimization" [10], which is the best single reference on serving-side GPU optimization from this period._
+
+**1. Batching.** One effective method to enhance GPU utilization and consequently increase throughput is by employing batching. This approach allows multiple requests to utilize the same model, thereby distributing the memory cost of the weights across all of them. By transferring larger batches to the GPU for simultaneous processing, the available computing power can be better harnessed. However, there is a limitation to the extent to which batch sizes can be increased, as it may result in memory overflow.
+
+The naive implementation — hold a batch, run it, return it, take the next — wastes a great deal of the throughput it was meant to buy. The reason is that generation lengths are not known in advance and are not uniform. A batch finishes when its slowest member finishes, so a batch containing one long generation and seven short ones occupies the GPU for the duration of the long one while seven slots sit idle producing padding. The wider the spread of output lengths, the worse the waste, and for a general-purpose serving endpoint that spread is wide by definition. In-flight batching addresses this by evicting completed sequences and admitting queued ones mid-batch, so that finished slots are refilled rather than idled.
+
+**2. Key-value caching.** A prevalent technique for enhancing the decode phase of an LLM is Key-Value (KV) caching. Decoding is autoregressive: one token per step, and every step attends over all the tokens before it. Without a cache, generating the *n*-th token means recomputing key and value projections for all *n-1* prior tokens — work that was already done at the previous step and whose result has not changed. Caching those projections in GPU memory turns that repeated quadratic work into an append: each step computes K and V for exactly one new token and concatenates them onto what is already stored. The cache is typically maintained per layer, since each layer attends over its own representations.
+
+The trade is memory for compute, and it is worth being precise about how much memory, because this is where the ceiling on batch size actually comes from.
+
+**3. LLM memory requirement.** GPU memory during inference goes to two places: the weights, which are fixed, and the KV cache, which is not.
+
+*Model weights* are the easy half — the calculation from the Memory section applies directly. Llama 2 7B at 16-bit precision is roughly 14 GB, and that figure does not move regardless of how many requests are in flight.
+
+*The KV cache* is the half that scales, and it scales with traffic. Every token of every sequence in the batch needs its own K and V entries at every layer, so the cost per token is:
+
+```
+bytes_per_token = 2 * n_layers * d_model * bytes_per_element
+```
+
+The leading 2 is simply the K and V tensors. `d_model` is the model's hidden dimension, which for standard multi-head attention equals `n_heads * head_dim` — worth stating explicitly because it is easy to double-count these when reading a config file.
+
+Multiply through by the tokens in flight and the batch width to get the total:
+
+```
+total_cache_bytes = batch_size * seq_len * bytes_per_token
+```
+
+Put Llama 2 7B's configuration through this — 32 layers, `d_model` of 4096, fp16 — and a single sequence at its full 4096-token context needs about 2 GB of cache on top of the 14 GB of weights. That ratio is the thing to internalise. At a batch size of 8 the cache is no longer a rounding error against the weights; it is comparable to them.
+
+<figure class="post-figure">
+<svg viewBox="0 0 760 268" role="img" aria-label="Stacked bar chart of Llama 2 7B GPU memory at 4096-token context. Model weights stay fixed at 14 gigabytes while the KV cache grows 2 gigabytes per sequence: 16 GB total at batch 1, 18 GB at batch 2, 22 GB at batch 4, and 30 GB at batch 8, which exceeds a 24 gigabyte card.">
+  <rect width="760" height="268" fill="#0a0a0a"/>
+  <g font-family="ui-monospace, monospace" font-size="11">
+    <text x="20" y="24" fill="#8a8a8a" letter-spacing="1.6">LLAMA 2 7B @ FP16, 4096-TOKEN CONTEXT</text>
+    <rect x="20" y="36" width="10" height="10" fill="#242424" stroke="#1a1a1a"/>
+    <text x="36" y="45" fill="#8a8a8a" font-size="10">weights (fixed)</text>
+    <rect x="146" y="36" width="10" height="10" fill="#ff2a2a" opacity="0.85"/>
+    <text x="162" y="45" fill="#8a8a8a" font-size="10">KV cache (scales)</text>
+    <line x1="544" y1="60" x2="544" y2="232" stroke="#ff2a2a" stroke-width="1" stroke-dasharray="4 3" opacity="0.65"/>
+    <text x="550" y="72" fill="#ff2a2a" font-size="10">24 GB card</text>
+    <text x="20" y="98" fill="#f5f5f5">batch 1</text>
+    <rect x="88" y="82" width="266" height="24" fill="#242424" stroke="#1a1a1a"/>
+    <rect x="354" y="82" width="38" height="24" fill="#ff2a2a" opacity="0.85"/>
+    <text x="690" y="99" fill="#8a8a8a" font-size="10">16 GB</text>
+    <text x="20" y="138" fill="#f5f5f5">batch 2</text>
+    <rect x="88" y="122" width="266" height="24" fill="#242424" stroke="#1a1a1a"/>
+    <rect x="354" y="122" width="76" height="24" fill="#ff2a2a" opacity="0.85"/>
+    <text x="690" y="139" fill="#8a8a8a" font-size="10">18 GB</text>
+    <text x="20" y="178" fill="#f5f5f5">batch 4</text>
+    <rect x="88" y="162" width="266" height="24" fill="#242424" stroke="#1a1a1a"/>
+    <rect x="354" y="162" width="152" height="24" fill="#ff2a2a" opacity="0.85"/>
+    <text x="690" y="179" fill="#8a8a8a" font-size="10">22 GB</text>
+    <text x="20" y="218" fill="#f5f5f5">batch 8</text>
+    <rect x="88" y="202" width="266" height="24" fill="#242424" stroke="#1a1a1a"/>
+    <rect x="354" y="202" width="304" height="24" fill="#ff2a2a" opacity="0.85"/>
+    <text x="690" y="219" fill="#ff2a2a" font-size="10">30 GB</text>
+    <text x="20" y="254" fill="#8a8a8a" font-size="10">Weights are a one-time cost. The cache is the one that decides how many users fit on the card.</text>
+  </g>
+</svg>
+<figcaption>At batch 8 the cache alone (16 GB) exceeds the weights (14 GB), and the total overruns a 24 GB card.</figcaption>
+</figure> Efficiently managing the KV cache is a complex task, and because the requirement grows linearly in both batch size and sequence length, it can quickly become unmanageable. This is the real limit on achievable throughput, and it is why long-context inputs are disproportionately expensive to serve.
+
+**4. Scaling up LLMs with model parallelization.** A method for decreasing the memory usage of model weights on individual devices is to distribute the model across multiple GPUs. By dispersing the memory and computational demands, it becomes possible to work with larger models or process greater batches of input data. Model parallelism is essential for training or conducting inference on models that demand more memory than a single device can provide, as well as for ensuring that training durations and inference metrics (such as latency or throughput) are appropriate for specific use cases. There are various approaches to model parallelization, depending on how the model weights are divided.
+
+Data parallelism is worth distinguishing here, because it comes up in the same conversations and solves a different problem. It replicates the whole model on each device and splits the incoming batch between them. That helps when the bottleneck is how much data you can push through, but it does nothing for the case that actually blocks inference — a model too large for one device. Since every replica still needs the full weights, data parallelism is largely a training-time concern and rarely the answer at serving time.
+
+## CPU Optimization
+
+One of the fundamental components influencing the efficacy of LLM inference is the optimization of CPU compute. The efficient utilization of CPU resources plays a pivotal role in accelerating inference tasks, minimizing latency, and enhancing overall system performance. Through careful optimization techniques, it is feasible to perform fast inference of large deep learning models directly on a CPU. These optimization methods allow large neural network architectures to make predictions on a central processing unit in a computationally efficient manner without requiring a dedicated GPU.
+
+**1. IPEX graph optimization.** The Intel® Extension for PyTorch (IPEX) library offers performance optimizations for PyTorch models running on Intel CPUs, especially when using JIT compilation via TorchScript. The mechanism is operator fusion: where the eager-mode graph would launch several small kernels in sequence, IPEX recognises the pattern and emits one. Each launch avoided is one less round-trip through memory for an intermediate tensor, and on CPU — where there is no thousand-way parallelism to hide that latency behind — the saving is proportionally larger than the same fusion would buy on GPU.
+
+Per Intel's documentation [3], the fused patterns include:
+
+> Multi-head-attention fusion, concat Linear, Linear+Add, Linear+Gelu, Add+LayerNorm fusion and etc.
+
+The combination of TorchScript for eager-to-graph compilation and IPEX for CPU-specific graph optimizations allows PyTorch models to achieve significant speedups on Intel hardware.
+
+**2. Indirect Access KV Cache.** The decoder layer in sequence-to-sequence models like neural machine translation uses an attention mechanism to decide which parts of the input sequence are most relevant when generating each output token. Specifically, it computes a scaled dot product between the input tokens' hidden states (the "keys") and the output tokens' hidden states (the "values") to determine the attention weights. To improve computational efficiency, the decoder layer can utilize a key-value cache to store previously computed keys and values for reuse in later decoding steps. However, caching all previous keys and values requires substantial memory, especially when beam search is used to generate multiple candidate output sequences in parallel. Therefore, techniques like truncated key-value caching only store keys and values for the most recent inputs to constrain memory usage. Though truncation discards potentially useful context, it allows faster decoding over long sequences by reducing redundant key-value recalculations.
+
+Memory is a bottleneck in efficient decoding with KV caches, and beam search makes it worse: the storage grows with the number of hypotheses kept alive. The naive implementation compounds the problem. Beams are pruned and re-ranked at every step, so a cache laid out per-beam has to be physically shuffled each time the ranking changes — copying tensors around to keep each beam's history contiguous. That reordering cost is pure overhead, and it recurs at every decoding step.
+
+Intel's Indirect Access KV Cache (IAKV) [3] removes it by decoupling storage from ordering. The cache is allocated once, up front, at a fixed size, and never moves. What changes instead is a small side table recording which slot each beam occupied at each step. Reading a beam's history means walking that table to collect the right slots, rather than maintaining a contiguous copy — an indirection, hence the name. Re-ranking becomes a cheap update to the index; the tensors themselves stay put. The pre-allocation is a secondary benefit, since it removes per-step allocator traffic as well.
+
+**3. C++ compiling.** PyTorch, the popular deep learning framework, now offers a powerful solution for deploying models beyond the confines of Python. Through TorchScript, developers can seamlessly compile their models into an optimized intermediate format, unlocking significant advantages for production environments. The key advantages are platform independence — compiled models shed the Python dependency, enabling deployment across diverse platforms and expanding operational reach — and a performance boost, where C++'s inherent speed translates directly to compiled models, resulting in faster inference and streamlined deployment.
+
+llama.cpp and whisper.cpp stand as tangible examples of this technology's effectiveness. llama.cpp requires models to be converted into one of two compatible formats before they can be used for efficient inference — GGML, named for its author Georgi Gerganov, or its successor GGUF, which replaced it in 2023 to fix GGML's poor extensibility and lack of stable metadata. Both are custom formats optimized specifically for llama.cpp. Users with models in other formats can convert them to GGML or GGUF using the conversion scripts included with llama.cpp. This allows a range of models to leverage the efficiency of llama.cpp while avoiding the need to retrain or rewrite them purely for compatibility.
+
+A key benefit offered by llama.cpp is the ability to run fine-tuned large language models locally on personal devices, eliminating the need for cloud services or high-performance hardware. This local deployment enables diverse applications — text generation, QA systems, summarization tools, chatbots, data analysis — while keeping data on-device and avoiding cloud costs and dependencies. Overall, llama.cpp grants self-contained and private local access to state-of-the-art natural language processing on common hardware, opening the door for innovative implementations across many vertical domains. The OpenAI-inspired interface further eases integration with existing pipelines and clients.
+
+## References
+
+1. [bfloat16 floating-point format — Wikipedia](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format)
+2. [Accelerate PyTorch with Intel® Extension for PyTorch](https://www.intel.com/content/www/us/en/developer/articles/technical/accelerate-with-intel-extension-for-pytorch.html)
+3. [Large Language Models (LLM) Optimization Overview — Intel® Extension for PyTorch](https://intel.github.io/intel-extension-for-pytorch/cpu/latest/tutorials/llm.html)
+4. [ggerganov/llama.cpp: LLM inference in C/C++](https://github.com/ggerganov/llama.cpp)
+5. Younes Belkada and Tim Dettmers, [A Gentle Introduction to 8-bit Matrix Multiplication for transformers at scale using Hugging Face Transformers, Accelerate and bitsandbytes](https://huggingface.co/blog/hf-bitsandbytes-integration) — Hugging Face
+6. [Making LLMs even more accessible with bitsandbytes, 4-bit quantization and QLoRA](https://huggingface.co/blog/4bit-transformers-bitsandbytes) — Hugging Face
+7. [Quantization — Hugging Face Transformers documentation](https://huggingface.co/docs/transformers/main/en/quantization)
+8. Tim Dettmers et al., [LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale](https://arxiv.org/abs/2208.07339)
+9. Tim Dettmers et al., [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)
+10. [Mastering LLM Techniques: Inference Optimization](https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/) — NVIDIA Developer Blog

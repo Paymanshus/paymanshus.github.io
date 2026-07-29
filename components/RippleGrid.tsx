@@ -100,12 +100,24 @@ export default function RippleGrid({
       return;
     }
 
-    const renderer = new Renderer({
-      alpha: true,
-      dpr: Math.min(window.devicePixelRatio, 2),
-    });
+    // WebGL is unavailable on GPU-blocklisted devices, with hardware
+    // acceleration off, and in some privacy modes. OGL throws from its
+    // constructor there, which would take the whole page down with it —
+    // this background is decorative, so failing means rendering nothing.
+    let renderer;
+    try {
+      renderer = new Renderer({
+        alpha: true,
+        dpr: Math.min(window.devicePixelRatio, 2),
+      });
+    } catch {
+      return;
+    }
 
     const gl = renderer.gl;
+    if (!gl) {
+      return;
+    }
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.canvas.style.width = '100%';

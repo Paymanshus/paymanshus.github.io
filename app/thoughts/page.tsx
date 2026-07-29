@@ -8,7 +8,7 @@ import { absoluteUrl, createMetadata } from '@/lib/site';
 export const metadata: Metadata = createMetadata({
   title: 'Thoughts',
   description:
-    'Markdown-backed essays and technical notes by Paymanshu Sharma, each with its own crawlable route and shareable URL.',
+    'Essays and technical notes by Paymanshu Sharma on machine learning, LLM agents, voice AI, and engineering craft.',
   path: '/thoughts',
   keywords: ['blog', 'technical writing', 'engineering essays'],
 });

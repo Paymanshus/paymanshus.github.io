@@ -120,6 +120,30 @@ export function getAllBlogSlugs() {
   return getAllBlogPosts().map((post) => post.slug);
 }
 
+export type AdjacentPosts = {
+  previous: BlogPostPreview | null;
+  next: BlogPostPreview | null;
+};
+
+/**
+ * Chronological neighbours of a post. Posts are sorted newest-first, so
+ * `previous` (older) is the following index and `next` (newer) is the one
+ * before it.
+ */
+export function getAdjacentBlogPosts(slug: string): AdjacentPosts {
+  const posts = getAllBlogPosts();
+  const index = posts.findIndex((post) => post.slug === slug);
+
+  if (index === -1) {
+    return { previous: null, next: null };
+  }
+
+  return {
+    previous: posts[index + 1] ?? null,
+    next: index > 0 ? posts[index - 1] : null,
+  };
+}
+
 export function getBlogPostBySlug(slug: string): BlogPost | null {
   const source = readBlogSourceBySlug(slug);
 
@@ -134,7 +158,9 @@ export function getBlogPostBySlug(slug: string): BlogPost | null {
     return null;
   }
 
-  const processedContent = remark().use(gfm).use(html).processSync(content);
+  // sanitize: false lets posts embed inline SVG figures. Safe here because blog
+  // content is authored in-repo and version-controlled — never user submitted.
+  const processedContent = remark().use(gfm).use(html, { sanitize: false }).processSync(content);
 
   return {
     ...toPreview(slug, frontmatter, content),

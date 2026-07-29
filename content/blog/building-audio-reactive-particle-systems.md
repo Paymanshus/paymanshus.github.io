@@ -1,11 +1,14 @@
 ---
 title: "Building Audio-Reactive Particle Systems"
-excerpt: "Translating voice into visual feedback with Canvas rendering and the Web Audio API."
+excerpt: "Explains how amplitude and frequency data from the Web Audio API drive a Canvas particle field that visually mirrors speech in a voice interface."
 date: "2026-01-28"
 tags:
-  - audio
+  - web audio api
   - canvas
+  - audio visualization
+  - voice interfaces
   - frontend
+published: false
 ---
 
 Voice interfaces are invisible by default. When you speak to an AI, you are talking into a black box. Good visual feedback makes that interaction feel less abstract and more alive.

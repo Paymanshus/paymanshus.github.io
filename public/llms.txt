@@ -1,0 +1,24 @@
+# Paymanshu Sharma
+
+> ML Engineer at Maersk in Bangalore who builds agentic AI systems and real-time voice agents.
+
+This site is the personal portfolio of Paymanshu Sharma. It includes an interactive resume (available as a PDF, a terminal-style chat, and a live voice agent) and a blog on interface design, AI, and frontend engineering.
+
+## Site
+
+- [Home](https://paymanshus.github.io/): landing page with a short intro and links into the resume and blog.
+- [Experience](https://paymanshus.github.io/experience/): interactive resume with three modes — PDF, terminal chat, and a live LiveKit voice agent.
+- [Thoughts](https://paymanshus.github.io/thoughts/): blog index covering design, AI, and frontend engineering.
+- [The CLI as a First-Class Interface](https://paymanshus.github.io/thoughts/the-cli-as-a-first-class-interface/): the case for terminal-style interaction patterns in modern web apps.
+- [Austere Neon: Designing for Focus](https://paymanshus.github.io/thoughts/austere-neon-designing-for-focus/): a minimalist design philosophy built on restraint and negative space.
+- [Building Audio-Reactive Particle Systems](https://paymanshus.github.io/thoughts/building-audio-reactive-particle-systems/): turning voice into visual feedback with Canvas and the Web Audio API.
+
+## Elsewhere
+
+- [GitHub](https://github.com/Paymanshus)
+- [LinkedIn](https://www.linkedin.com/in/paymanshus)
+- [Hugging Face](https://huggingface.co/paymanshus)
+
+## Contact
+
+- Email: paymanshus@gmail.com

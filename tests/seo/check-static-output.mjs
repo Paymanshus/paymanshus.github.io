@@ -83,6 +83,11 @@ console.log('home /');
     check('WebSite publisher references person @id', website?.publisher?.['@id'] === PERSON_ID);
     check('ProfilePage mainEntity references person @id', profile?.mainEntity?.['@id'] === PERSON_ID);
     check('meta description mentions role', html.includes('Machine Learning Engineer'));
+    check(
+      'og:image is the default card (no trailing slash)',
+      html.includes(`property="og:image" content="${SITE_URL}/og/default.png"`),
+    );
+    check('RSS feed is discoverable', html.includes(`${SITE_URL}/feed.xml`));
   }
 }
 
@@ -92,8 +97,13 @@ for (const route of ['experience', 'thoughts']) {
   const html = readHtml(`${route}/index.html`);
   if (html) {
     check('canonical points at own route', html.includes(`<link rel="canonical" href="${SITE_URL}/${route}/"`));
-    check('at most one h1', countH1(html) <= 1); // B3 tightens /experience to exactly one
+    check('exactly one h1', countH1(html) === 1);
     check('og:title present', html.includes('property="og:title"'));
+    check('og:image present', html.includes('property="og:image"'));
+    // Footer identity links: rel="me" is what ties the profiles to this domain.
+    check('footer links to GitHub with rel=me', /rel="me[^"]*"[^>]*github\.com|github\.com[^>]*rel="me/.test(html));
+    check('footer links to LinkedIn', html.includes('linkedin.com/in/paymanshus'));
+    check('footer links to Hugging Face', html.includes('huggingface.co/paymanshus'));
   }
 }
 
@@ -104,10 +114,68 @@ for (const slug of publishedSlugs()) {
   if (html) {
     check('canonical points at article', html.includes(`<link rel="canonical" href="${SITE_URL}/thoughts/${slug}/"`));
     check('exactly one h1', countH1(html) === 1);
-    const posting = jsonLdBlocks(html).find((b) => b['@type'] === 'BlogPosting');
+    const blocks = jsonLdBlocks(html);
+    const posting = blocks.find((b) => b['@type'] === 'BlogPosting');
+    const breadcrumbs = blocks.find((b) => b['@type'] === 'BreadcrumbList');
     check('BlogPosting present', Boolean(posting));
     check('author reconciles to person @id', posting?.author?.['@id'] === PERSON_ID);
     check('og:type article', html.includes('property="og:type" content="article"'));
+    check(
+      'per-post og:image',
+      html.includes(`property="og:image" content="${SITE_URL}/og/thoughts/${slug}.png"`),
+    );
+    check('og image file exists in out/', fs.existsSync(path.join(OUT, 'og', 'thoughts', `${slug}.png`)));
+    check('BreadcrumbList has 3 levels', breadcrumbs?.itemListElement?.length === 3);
+    check(
+      'breadcrumb trail is Home → Thoughts → post',
+      breadcrumbs?.itemListElement?.[0]?.item === `${SITE_URL}/` &&
+        breadcrumbs?.itemListElement?.[1]?.item === `${SITE_URL}/thoughts/`,
+    );
+  }
+}
+
+// ─── 404 ────────────────────────────────────────────────────────────
+console.log('404');
+{
+  const html = readHtml('404.html');
+  if (html) {
+    check('has an h1', countH1(html) === 1);
+    check('is noindex', html.includes('name="robots"') && html.includes('noindex'));
+    check('links back into the site', html.includes('/thoughts') && html.includes('/experience'));
+  }
+}
+
+// ─── Feeds + llms.txt ───────────────────────────────────────────────
+console.log('feeds');
+{
+  const rssPath = path.join(OUT, 'feed.xml');
+  const jsonPath = path.join(OUT, 'feed.json');
+  const llmsPath = path.join(OUT, 'llms.txt');
+  check('feed.xml exists', fs.existsSync(rssPath));
+  check('feed.json exists', fs.existsSync(jsonPath));
+  check('llms.txt exists', fs.existsSync(llmsPath));
+
+  const slugs = publishedSlugs();
+  if (fs.existsSync(rssPath)) {
+    const rss = fs.readFileSync(rssPath, 'utf8');
+    check('rss lists every published post', slugs.every((s) => rss.includes(`/thoughts/${s}/`)));
+    check('rss declares a self link', rss.includes('rel="self"'));
+  }
+  if (fs.existsSync(jsonPath)) {
+    let feed = null;
+    try {
+      feed = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    } catch {
+      /* reported below */
+    }
+    check('feed.json parses', feed !== null);
+    check('feed.json is JSON Feed 1.1', feed?.version === 'https://jsonfeed.org/version/1.1');
+    check('feed.json has an item per post', feed?.items?.length === slugs.length);
+  }
+  if (fs.existsSync(llmsPath)) {
+    const llms = fs.readFileSync(llmsPath, 'utf8');
+    check('llms.txt names the site owner', llms.includes('Paymanshu Sharma'));
+    check('llms.txt lists posts', slugs.every((s) => llms.includes(`/thoughts/${s}/`)));
   }
 }
 

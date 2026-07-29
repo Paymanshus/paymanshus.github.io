@@ -1,99 +1,125 @@
-# Paymanshu Sharma Portfolio
+# Paymanshu Sharma — Portfolio
 
-Next.js 15 static-export portfolio deployed to `paymanshus.github.io`, with
-three ways to explore Paymanshu's experience:
+Personal portfolio for Paymanshu Sharma, Machine Learning Engineer at Maersk
+(Bangalore). Live at **https://paymanshus.github.io**.
 
-- **Browse** — the standard portfolio pages and blog.
-- **Terminal chat** (`ChatResume.tsx`) — a text chat backed by an LLM with
-  resume content pre-loaded as context.
-- **Voice** (`VoiceResume.tsx`) — a live voice conversation over LiveKit,
-  backed by a Python agent (`agent/`) doing STT → LLM → TTS with resume
-  context injected per-turn.
+The site is a statically-exported Next.js app plus a standalone Python
+LiveKit voice agent that powers the interactive resume.
 
-See `readmes/SPECs/TECH_SPEC.md` and `readmes/SPECs/DESIGN_SPEC.md` for the
-living source of truth on implementation and design.
+## Experience modes (`/experience`)
 
-## Frontend — Local Development
+The experience page offers three ways to explore Paymanshu's resume:
 
-1. Install dependencies with `npm install` (Node 22 recommended, via nvm).
-2. Copy `.env.example` to `.env.local` if you want to override the
-   production site URL, or point `NEXT_PUBLIC_AGENT_URL` at a locally
-   running voice agent (see below).
-3. Run `npm run dev`.
+1. **PDF** (`components/resume/PdfResume.tsx`) — the resume PDF, embedded.
+2. **Terminal chat** (`components/resume/ChatResume.tsx`) — a text terminal
+   backed by an LLM grounded in resume context (`POST /api/chat` on the
+   agent server), with a keyword-matched offline fallback when the backend
+   is unreachable.
+3. **Voice** (`components/resume/VoiceResume.tsx`) — a live voice
+   conversation over LiveKit WebRTC with a Python agent that does
+   Deepgram STT → Gemini LLM → Cartesia TTS, with resume context injected
+   per turn.
 
-Checks before committing frontend changes:
+## Stack
+
+- **Frontend**: Next.js (App Router, static export via `output: 'export'`)
+  targeting GitHub Pages, TypeScript, Tailwind CSS v4, Framer Motion
+  (`motion`) for animation.
+- **Voice agent** (`agent/`): Python 3.11 + `livekit-agents`, Deepgram STT →
+  Gemini LLM (with fallback chain) → Cartesia TTS, Silero VAD, LiveKit
+  Multilingual turn detection. Runs as a standalone process, separate from
+  the Next.js app.
+
+## Repo layout
+
+| Path | What's there |
+| --- | --- |
+| `app/` | Next.js App Router routes (`/`, `/experience`, `/thoughts`) |
+| `components/` | UI components, including `components/resume/*` and `components/analytics/*` |
+| `content/blog/` | Blog post Markdown source |
+| `content/resumedump.md` | Flat resume text used by the agent's BM25 index and terminal LLM |
+| `lib/` | Shared helpers: `site.ts` (SEO/metadata), `blog.ts` (content loading), `utils.ts` |
+| `scripts/` | Build/deploy tooling — `generate-seo-files.mjs`, `sync_resume.py`, `deploy-pages.sh` |
+| `agent/` | Python LiveKit voice agent + token/chat HTTP server |
+| `readmes/` | Specs and plans (`SPECs/TECH_SPEC.md`, `SPECs/DESIGN_SPEC.md`, `SEOPLAN.md`) — repo-only, not published |
+| `public/` | Static assets (resume PDF, generated `robots.txt`/`sitemap.xml`, etc.) |
+
+## Frontend quickstart
 
 ```bash
-npm run lint && npm run build
+npm install
 ```
 
-`npm run build` emits the static site to `out/`.
+```bash
+npm run dev
+```
 
-## Voice Agent — Local Development
+Build the static site (runs `generate:seo` first, then `next build`):
 
-The voice/terminal LLM backend lives in `agent/` (Python, LiveKit Agents).
+```bash
+npm run build
+```
+
+Output goes to `out/`.
+
+## Agent quickstart
 
 ```bash
 cd agent
 python -m venv .venv && source .venv/bin/activate
+```
+
+```bash
 pip install -r requirements.txt
-cp .env.example .env.local   # fill in real API keys — see comments in the file
-python main.py download-files   # one-time: turn-detector model
-python main.py dev              # runs the LiveKit worker + token/chat HTTP server
 ```
-
-`.env.local` needs keys for LiveKit Cloud, Google Gemini, Deepgram, and
-Cartesia — each key's source URL is commented in `agent/.env.example`.
-
-The same process also serves `POST /api/token` (LiveKit room tokens) and
-`POST /api/chat` (the terminal chat's LLM endpoint) on `:8080`.
-
-### Agent tests
 
 ```bash
-cd agent
-.venv/bin/python -m pytest tests/ -q
+cp .env.example .env.local
 ```
 
-`tests/test_connections.py` is a manual smoke test (hits live third-party
-APIs with real keys) and is skipped by `pytest`; run it directly with
-`python tests/test_connections.py` to sanity-check API credentials.
-
-### Packaging / deployment
-
-`agent/Dockerfile`, `agent/fly.toml`, and `agent/RUN.md` describe how to
-containerize and deploy the agent to Fly.io. No agent has deployed this —
-deployment is the owner's responsibility, and `NEXT_PUBLIC_AGENT_URL` in
-`.github/workflows/deploy.yml` stays commented out until a Fly.io URL exists.
-
-## GitHub Pages Deployment (frontend)
-
-This project is configured for:
-
-- Next.js app router
-- static export via `output: 'export'`
-- GitHub Actions deployment from `.github/workflows/deploy.yml`
-
-When this code lives inside the `paymanshus.github.io` repository, pushing to
-`main` will build and deploy the exported site to GitHub Pages.
-
-For one-command local deployment into an existing clone of
-`paymanshus.github.io`, use:
+Fill in `.env.local` with real keys (LiveKit Cloud, Google Gemini, Deepgram,
+Cartesia — each key's source URL is commented in `agent/.env.example`).
+Langfuse observability keys are optional; without them tracing is a no-op.
 
 ```bash
-./scripts/deploy-pages.sh -m "Your commit message"
+python main.py dev
 ```
 
-If you only want to sync and let GitHub Actions perform the canonical build,
-use:
+This starts the LiveKit worker and also runs the token/chat HTTP server
+(`/api/token`, `/api/chat`, `/api/health`) on `:8080` in the same process —
+no separate server to run.
+
+## Tests
+
+Frontend:
 
 ```bash
-./scripts/deploy-pages.sh -m "Your commit message" --skip-build
+npm run lint
 ```
 
-## Content
+```bash
+npm run build && npm run test:seo
+```
 
-- Blog posts live in `content/blog`
-- Resume content for the terminal/voice LLMs lives in `content/resumedump.md`
-- SEO metadata is centralized in `lib/site.ts`
-- `readmes/` is repo-only documentation and is not publicly served
+Agent:
+
+```bash
+cd agent && .venv/bin/python -m pytest tests/ -q
+```
+
+## Deployment
+
+`.github/workflows/deploy.yml` builds and publishes the static export to
+GitHub Pages via GitHub Actions on every push to `main` (also supports
+manual dispatch). `scripts/deploy-pages.sh` is also available for
+one-command local deployment into an existing clone of the Pages repo.
+
+The voice agent is deployed separately (Fly.io is the plan; see
+`agent/RUN.md`) and is not part of the Pages build.
+
+## Docs
+
+- `readmes/SPECs/TECH_SPEC.md` — living source of truth for the shipped
+  implementation.
+- `readmes/SPECs/DESIGN_SPEC.md` — design system and visual spec.
+- `readmes/SEOPLAN.md` — SEO, analytics, and LLM observability task board.

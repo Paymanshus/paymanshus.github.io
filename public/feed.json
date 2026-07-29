@@ -1,0 +1,60 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "Thoughts — Paymanshu Sharma",
+  "home_page_url": "https://paymanshus.github.io/thoughts/",
+  "feed_url": "https://paymanshus.github.io/feed.json",
+  "description": "Essays on machine learning, agents, and engineering by Paymanshu Sharma.",
+  "language": "en-us",
+  "authors": [
+    {
+      "name": "Paymanshu Sharma",
+      "url": "https://paymanshus.github.io/"
+    }
+  ],
+  "items": [
+    {
+      "id": "https://paymanshus.github.io/thoughts/llm-optimization-memory-gpu-cpu/",
+      "url": "https://paymanshus.github.io/thoughts/llm-optimization-memory-gpu-cpu/",
+      "title": "Large Language Model Optimization: Memory, GPU, and CPU",
+      "summary": "A practical tour of LLM deployment optimization across three dimensions — precision formats and quantization for memory, batching and KV caching for GPU, and IPEX and llama.cpp for CPU.",
+      "date_published": "2024-12-14T00:00:00.000Z",
+      "tags": [
+        "llm optimization",
+        "quantization",
+        "precision",
+        "kv cache",
+        "inference",
+        "gpu"
+      ],
+      "image": "https://paymanshus.github.io/og/thoughts/llm-optimization-memory-gpu-cpu.png",
+      "authors": [
+        {
+          "name": "Paymanshu Sharma",
+          "url": "https://paymanshus.github.io/"
+        }
+      ]
+    },
+    {
+      "id": "https://paymanshus.github.io/thoughts/on-device-llms-on-android/",
+      "url": "https://paymanshus.github.io/thoughts/on-device-llms-on-android/",
+      "title": "On-Device Large Language Models on Android",
+      "summary": "Why running LLMs on phones is worth the trouble, and two working Android demos — a RAG document-querying app built on Phi-3-mini and ONNX Runtime, and a multi-LoRA adapter-switching app on Gemma 2B.",
+      "date_published": "2024-12-14T00:00:00.000Z",
+      "tags": [
+        "on-device ai",
+        "edge llm",
+        "onnx runtime",
+        "quantization",
+        "android",
+        "rag"
+      ],
+      "image": "https://paymanshus.github.io/og/thoughts/on-device-llms-on-android.png",
+      "authors": [
+        {
+          "name": "Paymanshu Sharma",
+          "url": "https://paymanshus.github.io/"
+        }
+      ]
+    }
+  ]
+}

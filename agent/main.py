@@ -34,7 +34,6 @@ from livekit.agents import (
     ChatContext,
     ChatMessage,
     TurnHandlingOptions,
-    llm as lk_llm,
     tts as lk_tts,
 )
 from livekit.plugins import google, deepgram, cartesia, silero
@@ -42,6 +41,8 @@ from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from resume_context import get_resume_index
 from token_server import create_token_app
 from observability import setup_voice_tracing, attach_usage_reporter
+import llm_models
+import llm_voice
 
 load_dotenv(".env.local")
 
@@ -49,20 +50,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voice-agent")
 
 # ─── Model configuration ───────────────────────────────────────────
-# LLM fallback chain. Gemini free-tier models get decommissioned and
-# capacity-throttled without notice (2.5-flash/2.5-flash-lite 404 as of
-# July 2026; 3.5-flash intermittently 503s). The FallbackAdapter moves
-# down the chain automatically. `gemini-flash-lite-latest` is Google's
-# rolling alias, so the last resort keeps working across sunsets.
-# Verify availability anytime with: python tests/probe_gemini.py
-VOICE_LLM_MODELS = [
-    m.strip()
-    for m in os.environ.get(
-        "VOICE_LLM_MODELS",
-        "gemini-3.5-flash,gemini-3.1-flash-lite,gemini-flash-lite-latest",
-    ).split(",")
-    if m.strip()
-]
+# The LLM ladder now lives in llm_models.VOICE_LADDER (env var: VOICE_LADDER),
+# which replaces the old VOICE_LLM_MODELS list. It spans providers rather than
+# just Gemini models, because Gemini's free-tier models used to share a chain
+# that could not survive a 429 — every rung hit the same quota.
+# Verify availability anytime with: python tests/probe_llm.py
 
 # Spoken answers should be 1-2 sentences; cap output hard so a rambling
 # generation can't blow up TTS time (and Cartesia credits).
@@ -170,12 +162,13 @@ async def voice_agent(ctx: agents.JobContext):
     else:
         stt_model = deepgram.STT(model="nova-3", language="en")
 
-    # LLM: Gemini fallback chain (rate limits / sunsets handled automatically)
-    llm_instances = [
-        google.LLM(model=m, max_output_tokens=VOICE_MAX_OUTPUT_TOKENS, temperature=0.6)
-        for m in VOICE_LLM_MODELS
-    ]
-    llm_model = lk_llm.FallbackAdapter(llm_instances)
+    # LLM: the VOICE_LADDER from llm_models, each entry guarded by the shared
+    # quota breaker (see llm_voice). Ordering is latency-first — 3.5-flash's
+    # measured ~6s TTFT would be dead air mid-call, so flash-lite leads here even
+    # though the terminal ladder leads with flash.
+    llm_model = llm_voice.build_voice_llm(
+        max_output_tokens=VOICE_MAX_OUTPUT_TOKENS, temperature=0.6
+    )
 
     # TTS: Cartesia sonic-3 primary; Deepgram Aura as credit/rate-limit fallback.
     # (Bare "sonic" was sunsetted — see tests/probe_cartesia.sh.)
@@ -211,6 +204,11 @@ async def voice_agent(ctx: agents.JobContext):
         status = "fallback" if not event.available else "ok"
         logger.warning("LLM availability changed: %s → voice.llm=%s", label, status)
         _publish_attrs({"voice.llm": status})
+        if not event.available:
+            # Share the finding with the terminal path so it stops probing an
+            # entry voice just found broken. Coarse (no quota scope available
+            # here) — see llm_voice.record_voice_unavailable.
+            llm_voice.record_voice_unavailable(event.llm)
 
     tts_model.on("tts_availability_changed", _on_tts_availability)
     try:

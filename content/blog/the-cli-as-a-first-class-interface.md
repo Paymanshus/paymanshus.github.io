@@ -1,11 +1,13 @@
 ---
 title: "The CLI as a First-Class Interface"
-excerpt: "Reimagining the terminal as a serious interaction model for modern web applications."
+excerpt: "Argues terminal-style interfaces bring speed and precision to web apps, using this site's Chat Resume mode as a working example of CLI-inspired design."
 date: "2026-02-15"
 tags:
   - cli
-  - ux
-  - interface
+  - terminal ux
+  - interface design
+  - developer tools
+published: false
 ---
 
 For decades, the command-line interface lived mostly with developers and system administrators. It stayed powerful, fast, and brutally efficient while the rest of the web moved toward increasingly dense graphical interfaces.

@@ -1,6 +1,7 @@
 import HeroSection from '@/components/HeroSection';
 import SiteShell from '@/components/SiteShell';
 import StructuredData from '@/components/StructuredData';
+import PageEngagement from '@/components/analytics/PageEngagement';
 import { absoluteUrl, personJsonLd, personRef, siteConfig, websiteJsonLd } from '@/lib/site';
 
 export default function HomePage() {
@@ -19,6 +20,7 @@ export default function HomePage() {
         }}
       />
       <SiteShell home>
+        <PageEngagement section="home_hero" />
         <HeroSection />
       </SiteShell>
     </>

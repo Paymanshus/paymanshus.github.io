@@ -1,13 +1,21 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import type { BlogPost } from '@/lib/blog';
+import type { AdjacentPosts, BlogPost } from '@/lib/blog';
 import { formatReadableDate } from '@/lib/site';
 import ReadingProgressBar from '@/components/ReadingProgressBar';
+import PageEngagement from '@/components/analytics/PageEngagement';
 
-export default function ThoughtPost({ post }: { post: BlogPost }) {
+export default function ThoughtPost({
+  post,
+  adjacent,
+}: {
+  post: BlogPost;
+  adjacent?: AdjacentPosts;
+}) {
   return (
     <article className="mx-auto max-w-[50rem] pb-32 pt-12">
       <ReadingProgressBar />
+      <PageEngagement section={`article:${post.slug}`} scrollDepth />
 
       <Link
         href="/thoughts"
@@ -34,6 +42,36 @@ export default function ThoughtPost({ post }: { post: BlogPost }) {
       </header>
 
       <div className="thought-post-content" dangerouslySetInnerHTML={{ __html: post.content }} />
+
+      {adjacent && (adjacent.previous || adjacent.next) ? (
+        <nav
+          aria-label="More posts"
+          className="mt-24 grid gap-8 border-t border-border pt-10 sm:grid-cols-2"
+        >
+          {adjacent.previous ? (
+            <Link href={`/thoughts/${adjacent.previous.slug}`} className="group">
+              <span className="font-mono text-xs uppercase tracking-[0.22em] text-text-secondary">
+                Previous
+              </span>
+              <span className="mt-2 block text-lg font-light leading-snug transition-colors duration-300 group-hover:text-brand-red">
+                {adjacent.previous.title}
+              </span>
+            </Link>
+          ) : (
+            <span />
+          )}
+          {adjacent.next ? (
+            <Link href={`/thoughts/${adjacent.next.slug}`} className="group sm:text-right">
+              <span className="font-mono text-xs uppercase tracking-[0.22em] text-text-secondary">
+                Next
+              </span>
+              <span className="mt-2 block text-lg font-light leading-snug transition-colors duration-300 group-hover:text-brand-red">
+                {adjacent.next.title}
+              </span>
+            </Link>
+          ) : null}
+        </nav>
+      ) : null}
     </article>
   );
 }

@@ -1,10 +1,12 @@
 livekit-agents>=1.0
 livekit-plugins-google
+livekit-plugins-openai  # OpenRouter rung of the LLM ladder (OpenAI-compatible)
 livekit-plugins-deepgram
 livekit-plugins-cartesia
 livekit-plugins-silero
 livekit-plugins-turn-detector
 livekit-api
+google-genai  # direct Gemini calls in llm_ladder + scripts/sync_resume.py
 aiohttp
 python-dotenv
 langfuse>=4,<5  # observability (v4 SDK; env-gated, agent runs fine without keys)
