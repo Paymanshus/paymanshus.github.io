@@ -11,6 +11,19 @@ tsconfig.tsbuildinfo
 coverage/
 .DS_Store
 *.log
+
+# Python caches (anywhere, not just agent/)
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Lighthouse writes temp Chrome profiles here when run from WSL — the
+# literal Windows path becomes a directory name in the repo root.
+C:\\*/
+lighthouse.*/
+
+# Scratch/eval output from local agent runs
+agent/tests/results/
 .env*
 !.env.example
 # WORKING_ON.md
@@ -23,3 +36,13 @@ readmes/
 docs/
 left.md
 promptlatest.md
+status.md
+
+# Agent/assistant working files — internal, not portfolio content
+AGENTS.md
+CLAUDE.md
+.claude/
+GEMINI.md
+
+# Scratch LiveKit scaffold kept for local experiments only
+tests/voicetest-1ht8ba/
