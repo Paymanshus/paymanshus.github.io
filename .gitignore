@@ -26,23 +26,43 @@ lighthouse.*/
 agent/tests/results/
 .env*
 !.env.example
+!.env.example.*
 # WORKING_ON.md
 metadata.json
 paymanshu-sharma-portfolio.zip
 stitch_assets/
 deployed/
-# Private planning/docs — never publish
-readmes/
-docs/
+
+# ---------------------------------------------------------------------------
+# Docs split
+#
+# TRACKED (cloned to every machine): living specs, remaining task boards,
+# and runbooks that another agent needs to keep working. See AGENTS.md.
+#   readmes/SPECs/*          TECH_SPEC, DESIGN_SPEC, BLOG_VISUALS
+#   readmes/SEOPLAN.md       remaining owner SEO/analytics tasks
+#   readmes/DEPLOY_VOICE_AGENT.md
+#   docs/SEO_SETUP.md
+#   README.md, agent/RUN.md, AGENTS.md
+#
+# LOCAL ONLY (this machine; copy by hand if you still want them elsewhere):
+#   the rest of readmes/, docs/voice-feature/, left.md, prompt dumps,
+#   machine-local agent config, secrets.
+# ---------------------------------------------------------------------------
+readmes/*
+!readmes/SPECs/
+!readmes/SPECs/**
+!readmes/SEOPLAN.md
+!readmes/DEPLOY_VOICE_AGENT.md
+!readmes/WORKING_ON.md
+docs/voice-feature/
 left.md
 promptlatest.md
 status.md
 
-# Agent/assistant working files — internal, not portfolio content
-AGENTS.md
+# Machine-local assistant config (Windows paths, permission allowlists)
 CLAUDE.md
 .claude/
 GEMINI.md
 
 # Scratch LiveKit scaffold kept for local experiments only
-tests/voicetest-1ht8ba/
+tests/voicetest*

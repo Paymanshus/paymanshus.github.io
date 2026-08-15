@@ -127,13 +127,17 @@ test('figures are self-contained and captioned', () => {
   }
 });
 
-test('blog-figures skill and its reference copy stay in sync', () => {
-  // readmes/SPECs/BLOG_VISUALS.md exists so the workflow survives on a machine
-  // where the skill isn't loaded. It must not drift from the skill itself.
-  const skill = fs.readFileSync(
-    path.join(process.cwd(), '.claude', 'skills', 'blog-figures', 'SKILL.md'),
-    'utf8',
-  );
+test('blog-figures skill and its reference copy stay in sync', (t) => {
+  // readmes/SPECs/BLOG_VISUALS.md is the committed copy so the workflow
+  // survives on a clone where the local skill isn't loaded. Skip the
+  // drift check when the skill file is absent (it lives under gitignored
+  // `.claude/`).
+  const skillPath = path.join(process.cwd(), '.claude', 'skills', 'blog-figures', 'SKILL.md');
+  if (!fs.existsSync(skillPath)) {
+    t.skip('blog-figures skill is not present on this machine');
+    return;
+  }
+  const skill = fs.readFileSync(skillPath, 'utf8');
   const copy = fs.readFileSync(
     path.join(process.cwd(), 'readmes', 'SPECs', 'BLOG_VISUALS.md'),
     'utf8',

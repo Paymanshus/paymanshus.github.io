@@ -41,7 +41,8 @@ The experience page offers three ways to explore Paymanshu's resume:
 | `lib/` | Shared helpers: `site.ts` (SEO/metadata), `blog.ts` (content loading), `utils.ts` |
 | `scripts/` | Build/deploy tooling — `generate-seo-files.mjs`, `sync_resume.py`, `deploy-pages.sh` |
 | `agent/` | Python LiveKit voice agent + token/chat HTTP server |
-| `readmes/` | Specs and plans (`SPECs/TECH_SPEC.md`, `SPECs/DESIGN_SPEC.md`, `SEOPLAN.md`) — repo-only, not published |
+| `readmes/SPECs/` | Living specs (`TECH_SPEC.md`, `DESIGN_SPEC.md`) — committed so every clone has them |
+| `docs/SEO_SETUP.md` | Owner runbook for Search Console / GA4 |
 | `public/` | Static assets (resume PDF, generated `robots.txt`/`sitemap.xml`, etc.) |
 
 ## Frontend quickstart
@@ -119,7 +120,18 @@ The voice agent is deployed separately (Fly.io is the plan; see
 
 ## Docs
 
+Tracked (in git, available on every clone):
+
+- `AGENTS.md` — what to read first, and which secrets to copy by hand
 - `readmes/SPECs/TECH_SPEC.md` — living source of truth for the shipped
-  implementation.
-- `readmes/SPECs/DESIGN_SPEC.md` — design system and visual spec.
-- `readmes/SEOPLAN.md` — SEO, analytics, and LLM observability task board.
+  implementation
+- `readmes/SPECs/DESIGN_SPEC.md` — design system and visual spec
+- `readmes/SPECs/BLOG_VISUALS.md` — inline SVG figure rules for blog posts
+- `readmes/SEOPLAN.md` — SEO/analytics task board (Phase E is owner-only)
+- `readmes/DEPLOY_VOICE_AGENT.md` — Fly.io go-live checklist
+- `docs/SEO_SETUP.md` — Search Console / GA4 / indexing runbook
+- `agent/RUN.md` — local, Docker, and Fly commands for the voice agent
+
+Local-only (gitignored planning/scratch — not cloned): `readmes/notes.md`,
+`left.md`, `docs/voice-feature/`, lighthouse dumps, prompt drafts. See
+`.gitignore`.

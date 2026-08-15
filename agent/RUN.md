@@ -121,7 +121,7 @@ flyctl deploy --config agent/fly.toml --dockerfile agent/Dockerfile -a paymanshu
 After deploy, get the app URL (`https://paymanshu-voice-agent.fly.dev`) and:
 
 1. Uncomment `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`
-   (see item 8 in `left.md` — the line is already prepared, commented out).
+   (the line is already prepared, commented out).
 2. Set the same var in the frontend's local `.env.local` if testing against
    the deployed agent from a local `npm run dev`.
 
