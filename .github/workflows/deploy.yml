@@ -20,9 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_SITE_URL: https://paymanshus.github.io
-      # Uncomment once the GA4 property exists (SEOPLAN.md task E1) and the
-      # measurement id is stored as a repository variable.
-      # NEXT_PUBLIC_GA_ID: ${{ vars.NEXT_PUBLIC_GA_ID }}
+      NEXT_PUBLIC_GA_ID: ${{ vars.NEXT_PUBLIC_GA_ID }}
       # HTML-tag verification is also baked into lib/site.ts so GSC works even
       # if this variable is unset. Keep both in sync if Google rotates the token.
       NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION: ${{ vars.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }}

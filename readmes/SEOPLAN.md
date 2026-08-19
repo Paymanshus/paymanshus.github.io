@@ -328,7 +328,7 @@ possible on this host:
 | --- | --- | --- | --- |
 | **HTML file** (`google51d43957481c87ef.html` at site root) | Yes — after this deploy is live | Yes | **Shipped** in `public/google51d43957481c87ef.html`. Wait for Pages, then click **Verify**. Do not delete the file. |
 | **HTML meta tag** (`google-site-verification`) | Yes — after this deploy is live | Yes | **Shipped** in `app/layout.tsx` / `lib/site.ts` (`0o-VrKZb3IemUzf8qmVFsl_dRpOwOPaZU1azIjFYnkw`). Same: wait for Pages, then Verify. |
-| **Google Analytics** (gtag.js on the homepage) | You can create the GA4 property today (~10 min) | Agent can wire the `G-XXXX` id once you paste it | **Blocked on you.** Analytics code is already in the repo and inert until `NEXT_PUBLIC_GA_ID` is set. This is also the way to **count visitors** — GSC verification does not give traffic counts. |
+| **Google Analytics** (gtag.js on the homepage) | Yes — live after this deploy | Yes | **Shipped** (`G-5LV14G6B05` via `NEXT_PUBLIC_GA_ID`). Check GA4 → Reports → Realtime. |
 | **Google Tag Manager** | Only if you first create a GTM container | Not worth adding just to verify | **Skip.** The site does not use GTM. Meta tag + HTML file already cover ownership. |
 | **DNS TXT** (`google-site-verification=CnlXj14HVM8sSgvtriztuQ6nKfE3wIS3oddj0lRDz_Y` on `paymanshus.github.io`) | **No** | **No** | **Impossible.** `github.io` DNS is owned by GitHub. You cannot add TXT records for this hostname. Only viable after a custom domain (E4). |
 

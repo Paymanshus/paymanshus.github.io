@@ -20,8 +20,8 @@ Work on `main`. Commit with a concise imperative subject. Push to
 - Do not force-push `main`.
 - Do not skip hooks.
 - Secrets (`agent/.env.local`, root `.env.local`) never go in git.
-- `NEXT_PUBLIC_GA_ID` stays commented in the workflow until the owner
-  creates GA4 and sets the repo variable.
+- `NEXT_PUBLIC_GA_ID` is set via GitHub Actions variable (`G-5LV14G6B05`).
+  Analytics loads in production only.
 
 ## Monitoring
 

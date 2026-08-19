@@ -19,8 +19,8 @@ account you want tied to Search Console / Analytics.
   `app/layout.tsx` (`content="0o-VrKZb3IemUzf8qmVFsl_dRpOwOPaZU1azIjFYnkw"`).
   The deploy workflow also passes `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` when
   the GitHub Actions variable is set.
-- **Owner still does:** wait for Pages → click **Verify** in GSC → submit
-  `sitemap.xml` → create GA4 and store `NEXT_PUBLIC_GA_ID` (visitor counts).
+- **Owner still does:** click **Verify** in GSC (if not done) → submit
+  `sitemap.xml` → confirm GA4 Realtime after deploy.
 - **DNS TXT on `paymanshus.github.io`:** not possible. GitHub owns that DNS.
 - **Google Tag Manager:** not used; skip.
 
