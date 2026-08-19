@@ -10,6 +10,20 @@ This is written for the site owner doing it once by hand. It assumes you
 already have push access to the repo and are signed in with the Google
 account you want tied to Search Console / Analytics.
 
+## Status (2026-08-19)
+
+- **Search Console HTML file** is committed at
+  `public/google51d43957481c87ef.html` (served at
+  `https://paymanshus.github.io/google51d43957481c87ef.html`). Keep it forever.
+- **Search Console HTML tag** is baked into `lib/site.ts` /
+  `app/layout.tsx` (`content="0o-VrKZb3IemUzf8qmVFsl_dRpOwOPaZU1azIjFYnkw"`).
+  The deploy workflow also passes `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` when
+  the GitHub Actions variable is set.
+- **Owner still does:** wait for Pages → click **Verify** in GSC → submit
+  `sitemap.xml` → create GA4 and store `NEXT_PUBLIC_GA_ID` (visitor counts).
+- **DNS TXT on `paymanshus.github.io`:** not possible. GitHub owns that DNS.
+- **Google Tag Manager:** not used; skip.
+
 ## 1. What's already wired
 
 The code side of this is done — nothing below requires a code change beyond
@@ -52,39 +66,25 @@ both already have a commented-out line waiting in
    that method is impossible here. URL-prefix supports HTML-tag verification
    instead, which you do control.
 
-### 2.2 Verify with the HTML tag method
+### 2.2 Verify with the HTML tag or HTML file (already in the repo)
 
-1. In the verification screen, expand **HTML tag** (not the default "Recommended" file-upload method — pick HTML tag from the list of options).
-2. Copy only the `content="..."` value out of the snippet Google shows you, e.g. if it gives you:
-   ```html
-   <meta name="google-site-verification" content="AbCdEf12345..." />
-   ```
-   you only want `AbCdEf12345...`.
-3. Add it as a GitHub repository **variable** (not a secret — this value ends up in public HTML anyway):
-   - Go to the repo on GitHub → **Settings** → **Secrets and variables** → **Actions** → **Variables** tab → **New repository variable**.
-   - Name: `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`
-   - Value: the `content` string from step 2.
-4. Edit `.github/workflows/deploy.yml` and uncomment this line inside the `build` job's `env:` block:
-   ```yaml
-   NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION: ${{ vars.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }}
-   ```
-5. Commit and push to `main` to trigger a redeploy:
-   ```bash
-   git add .github/workflows/deploy.yml
-   ```
-   ```bash
-   git commit -m "Enable Google Search Console verification"
-   ```
-   ```bash
-   git push
-   ```
-6. Wait for the **Deploy GitHub Pages** workflow to finish (Actions tab in the repo). This can take a few minutes.
-7. Confirm the tag is live before clicking Verify:
+The HTML tag and the HTML file from Search Console are already in the
+tree. You do **not** need to paste the meta tag by hand or upload the
+file through GitHub's UI.
+
+1. Wait for **Deploy GitHub Pages** to finish after a push to `main`.
+2. Confirm both methods are live:
    ```bash
    curl -s https://paymanshus.github.io/ | grep google-site-verification
+   curl -sI https://paymanshus.github.io/google51d43957481c87ef.html
    ```
-   You should see the `<meta>` tag with your value.
-8. Back in Search Console, click **Verify**.
+3. In Search Console, click **Verify** (HTML tag or HTML file — either is enough).
+4. Do not remove `public/google51d43957481c87ef.html` or the meta tag in
+   `lib/site.ts` after verification succeeds.
+
+If Google ever rotates the token, update `GOOGLE_SITE_VERIFICATION` in
+`lib/site.ts`, replace the HTML file in `public/`, and optionally set the
+GitHub Actions variable `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`.
 
 ### 2.3 Submit the sitemap
 

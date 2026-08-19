@@ -3,6 +3,7 @@ import { Space_Grotesk, Instrument_Serif, JetBrains_Mono, Lora } from 'next/font
 import Analytics from '@/components/analytics/Analytics';
 import {
   DEFAULT_OG_IMAGE,
+  GOOGLE_SITE_VERIFICATION,
   absoluteAssetUrl,
   absoluteUrl,
   defaultKeywords,
@@ -64,7 +65,7 @@ export const metadata: Metadata = {
     },
   },
   verification: {
-    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    google: GOOGLE_SITE_VERIFICATION,
   },
   openGraph: {
     type: 'website',

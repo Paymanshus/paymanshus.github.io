@@ -84,6 +84,15 @@ console.log('home /');
     check('ProfilePage mainEntity references person @id', profile?.mainEntity?.['@id'] === PERSON_ID);
     check('meta description mentions role', html.includes('Machine Learning Engineer'));
     check(
+      'GSC HTML-tag verification is present',
+      html.includes('name="google-site-verification"') &&
+        html.includes('0o-VrKZb3IemUzf8qmVFsl_dRpOwOPaZU1azIjFYnkw'),
+    );
+    check(
+      'document title uses AI Product Engineer',
+      html.includes('Paymanshu Sharma | AI Product Engineer'),
+    );
+    check(
       'og:image is the default card (no trailing slash)',
       html.includes(`property="og:image" content="${SITE_URL}/og/default.png"`),
     );
@@ -176,6 +185,20 @@ console.log('feeds');
     const llms = fs.readFileSync(llmsPath, 'utf8');
     check('llms.txt names the site owner', llms.includes('Paymanshu Sharma'));
     check('llms.txt lists posts', slugs.every((s) => llms.includes(`/thoughts/${s}/`)));
+  }
+}
+
+// ─── Google Search Console HTML file ────────────────────────────────
+console.log('GSC HTML file');
+{
+  const gscPath = path.join(OUT, 'google51d43957481c87ef.html');
+  check('verification HTML file is exported at site root', fs.existsSync(gscPath));
+  if (fs.existsSync(gscPath)) {
+    const body = fs.readFileSync(gscPath, 'utf8');
+    check(
+      'verification HTML file has Google token line',
+      body.includes('google-site-verification: google51d43957481c87ef.html'),
+    );
   }
 }
 

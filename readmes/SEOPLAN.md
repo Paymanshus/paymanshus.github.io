@@ -88,7 +88,7 @@ after any SEO-touching change: `npm run build && npm run test:seo`.
 | B (Opus) | B1 analytics, B2 OG images, B3 crawlability | ✅ done 2026-07-25 |
 | C (Sonnet) | C1–C6 | ✅ done 2026-07-25 |
 | D (Haiku) | D1–D4 | ✅ done 2026-07-25 — see `readmes/seo-verify-report.md` |
-| E (Owner) | E1–E5 | ⬜ pending — only the human can do these |
+| E (Owner) | E1–E5 | ⏳ E1 verification files shipped 2026-08-19; owner still must click Verify, submit sitemap, create GA4 |
 
 Final audit (local build, headless): **SEO 100, Accessibility 100, Best practices 96,
 Performance 86**. Verification commands, all green:
@@ -319,8 +319,39 @@ From WSL: `npx lighthouse https://paymanshus.github.io --only-categories=seo,per
 
 ## Phase E — OWNER tasks (no agent can do these)
 
-- **E1**: Create GA4 property → put `G-XXXX` in repo secret/env and uncomment the
-  deploy.yml line (after B1). Create GSC property + verify (after C2), submit sitemap.
+### Search Console verification methods (updated 2026-08-19)
+
+Google offered five ways to verify `https://paymanshus.github.io/`. What is
+possible on this host:
+
+| Method | Can you do it today? | Can an agent do it? | Status |
+| --- | --- | --- | --- |
+| **HTML file** (`google51d43957481c87ef.html` at site root) | Yes — after this deploy is live | Yes | **Shipped** in `public/google51d43957481c87ef.html`. Wait for Pages, then click **Verify**. Do not delete the file. |
+| **HTML meta tag** (`google-site-verification`) | Yes — after this deploy is live | Yes | **Shipped** in `app/layout.tsx` / `lib/site.ts` (`0o-VrKZb3IemUzf8qmVFsl_dRpOwOPaZU1azIjFYnkw`). Same: wait for Pages, then Verify. |
+| **Google Analytics** (gtag.js on the homepage) | You can create the GA4 property today (~10 min) | Agent can wire the `G-XXXX` id once you paste it | **Blocked on you.** Analytics code is already in the repo and inert until `NEXT_PUBLIC_GA_ID` is set. This is also the way to **count visitors** — GSC verification does not give traffic counts. |
+| **Google Tag Manager** | Only if you first create a GTM container | Not worth adding just to verify | **Skip.** The site does not use GTM. Meta tag + HTML file already cover ownership. |
+| **DNS TXT** (`google-site-verification=CnlXj14HVM8sSgvtriztuQ6nKfE3wIS3oddj0lRDz_Y` on `paymanshus.github.io`) | **No** | **No** | **Impossible.** `github.io` DNS is owned by GitHub. You cannot add TXT records for this hostname. Only viable after a custom domain (E4). |
+
+After the Pages deploy finishes, confirm then verify:
+
+```bash
+curl -s https://paymanshus.github.io/ | grep google-site-verification
+curl -sI https://paymanshus.github.io/google51d43957481c87ef.html
+```
+
+Then in Search Console: **Verify** (HTML file or HTML tag — either is enough), then
+**Sitemaps → submit `sitemap.xml`**.
+
+- **E1 (remaining)**:
+  1. Click **Verify** in Search Console once the meta tag / HTML file is live.
+  2. Submit `https://paymanshus.github.io/sitemap.xml`.
+  3. Create a GA4 property + Web stream for `https://paymanshus.github.io`, copy the
+     Measurement ID (`G-XXXXXXXXXX`), add GitHub Actions repo variable
+     `NEXT_PUBLIC_GA_ID`, and tell an agent (or uncomment
+     `NEXT_PUBLIC_GA_ID: ${{ vars.NEXT_PUBLIC_GA_ID }}` in
+     `.github/workflows/deploy.yml` yourself). Until that id exists, **visitor
+     counts are not collected**.
+  4. Optional: Bing Webmaster Tools → Import from Google Search Console.
 - **E2 (highest-leverage SEO action available)**: put `https://paymanshus.github.io`
   in the website field of: GitHub profile, LinkedIn (both contact-info website AND
   featured section), HuggingFace profile, Kaggle, X/Twitter if any. Consistent

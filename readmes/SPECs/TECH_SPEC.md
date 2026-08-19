@@ -188,7 +188,10 @@ Current pieces:
   `personJsonLd()` / `websiteJsonLd()` / `personRef()` builders. Every page
   references the same Person `@id` (full node on home; stub nodes elsewhere) so
   crawlers reconcile one entity. Identity facts (ML Engineer at Maersk, Bangalore,
-  LinkedIn `/in/paymanshus`) mirror `content/resumedump.md`.
+  LinkedIn `/in/paymanshus`) mirror `content/resumedump.md`. Document title is
+  `Paymanshu Sharma | AI Product Engineer`. GSC HTML-tag token lives here as
+  `GOOGLE_SITE_VERIFICATION` (env override, committed fallback). The HTML-file
+  method is `public/google51d43957481c87ef.html` at the site root.
 - Route metadata in `app/layout.tsx`, `app/experience/page.tsx`, `app/thoughts/page.tsx`, and `app/thoughts/[slug]/page.tsx`
 - JSON-LD via `components/StructuredData.tsx` (home: WebSite + Person + ProfilePage;
   articles: BlogPosting with `@id` author/publisher)

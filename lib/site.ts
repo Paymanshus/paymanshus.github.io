@@ -5,7 +5,7 @@ export const siteConfig = {
   firstName: 'Paymanshu',
   jobTitle: 'Machine Learning Engineer',
   employer: 'Maersk',
-  defaultTitle: 'Paymanshu Sharma | Machine Learning Engineer',
+  defaultTitle: 'Paymanshu Sharma | AI Product Engineer',
   description:
     'Paymanshu Sharma is a Machine Learning Engineer at Maersk, Bangalore, building agentic AI and voice systems. Portfolio with an interactive resume you can talk to — PDF, terminal, and voice — plus essays on ML and engineering.',
   url: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshus.github.io',
@@ -30,9 +30,14 @@ type SeoInput = {
   ogImage?: string;
 };
 
+export const GOOGLE_SITE_VERIFICATION =
+  process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ||
+  '0o-VrKZb3IemUzf8qmVFsl_dRpOwOPaZU1azIjFYnkw';
+
 export const defaultKeywords = [
   'Paymanshu Sharma',
   'Paymanshu',
+  'AI Product Engineer',
   'Machine Learning Engineer',
   'ML engineer Bangalore',
   'agentic AI',
