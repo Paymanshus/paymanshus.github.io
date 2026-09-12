@@ -118,10 +118,11 @@ flyctl secrets set \
 flyctl deploy --config agent/fly.toml --dockerfile agent/Dockerfile -a paymanshu-voice-agent
 ```
 
-After deploy, get the app URL (`https://paymanshu-voice-agent.fly.dev`) and:
+After deploy, get the app URL (`https://<app>.fly.dev` or the Railway
+`*.up.railway.app` host) and:
 
-1. Uncomment `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`
-   (the line is already prepared, commented out).
+1. Set `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml` (already
+   set to the Railway URL) and push so GitHub Pages rebuilds.
 2. Set the same var in the frontend's local `.env.local` if testing against
    the deployed agent from a local `npm run dev`.
 

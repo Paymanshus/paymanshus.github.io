@@ -313,7 +313,7 @@ This keeps rollback simple because the old history remains in the same repositor
 
 A standalone Python service in `agent/` that handles the real-time voice pipeline for the `/experience` voice mode. It runs separately from the Next.js app and communicates only through LiveKit's WebRTC infrastructure.
 
-**Hosting: not yet deployed, and the target is under review.** `agent/fly.toml` and `agent/RUN.md` describe a fly.io deployment, but fly.io's free tier no longer exists and the committed `fly.toml` scale-to-zero settings are incompatible with a persistent-registration LiveKit worker. See `readmes/deployment_options.md` for the measured resource profile (~205 MB resident at idle, 350–500 MB per session), the cost model, and the provider comparison. Current recommendation is a plain VPS (Oracle Cloud Always Free ARM, fallback RackNerd) over a PaaS.
+**Hosting: Railway is up at `https://paymanshusgithubio-production.up.railway.app` but the worker was crash-looping on the multilingual turn-detector subprocess (see `readmes/deployment_options.md`). The static site is pointed at that URL via `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. Turn detection is off on Railway unless `VOICE_TURN_DETECTOR=true`. Do not enable Railway Serverless sleep.**
 
 Note for any hosting work: the agent worker registers with LiveKit Cloud over an **outbound** WebSocket and needs no public inbound ports. Only the `token_server.py` HTTP endpoints (:8080) require a public URL.
 
@@ -327,7 +327,7 @@ Note for any hosting work: the agent worker registers with LiveKit Cloud over an
 | LLM | Multi-provider ladder (`llm_ladder.py`) — Gemini + OpenRouter, shared quota breaker | `VOICE_LADDER` env, default `gemini-3.1-flash-lite → openrouter(nemotron-nano:free → deepseek-v4-flash) → gemini-flash-lite-latest`. Voice is latency-ordered; the terminal ladder differs. Probe with `tests/probe_llm.py` |
 | TTS | Cartesia `sonic-3` → Deepgram Aura via `tts.FallbackAdapter` | Bare `sonic` was sunsetted by Cartesia (400). Model via `CARTESIA_MODEL`, voice via `CARTESIA_VOICE_ID`. Verified with `tests/probe_cartesia.sh` |
 | VAD | Silero (local) | `livekit-plugins-silero`; no API call, no cost |
-| Turn detection | LiveKit Multilingual Model | ONNX model cached to `~/.cache/huggingface/` |
+| Turn detection | LiveKit Multilingual Model (local default) | Skipped on Railway unless `VOICE_TURN_DETECTOR=true` — the EOU inference child is ~500MB and OOM-kills Trial/Free. Silero VAD endpointing is the fallback. |
 
 ### Directory structure
 
@@ -591,7 +591,7 @@ The voice agent server (`agent/`) is the first backend service and is now scaffo
   lifetime deposit is what raises `:free` from 50 to 1,000 RPD. Also
   `tests/eval_context_modes.py` still needs a full run to pick the
   `LLM_CONTEXT_MODE` default from data rather than reasoning.
-- **Feature 07**: Deployment — `agent/Dockerfile` (build from repo root: `docker build -f agent/Dockerfile .`, so it can COPY `content/resumedump.md`; runs `main.py download-files` at build time) and `agent/fly.toml` are in place; see `agent/RUN.md` for local/Docker/flyctl commands. Actual fly.io deploy is still the owner's job — `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml` is prepared but commented out until a Fly.io URL exists.
+- **Feature 07**: Deployment — Railway from GitHub (`railway.toml` + `agent/Dockerfile`, repo-root context). Public URL is `https://paymanshusgithubio-production.up.railway.app`. Pages gets it from `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. Worker must stay always-on (no Serverless). `VOICE_TURN_DETECTOR` defaults off on Railway so the EOU subprocess does not OOM.
 
 Integration rules going forward:
 

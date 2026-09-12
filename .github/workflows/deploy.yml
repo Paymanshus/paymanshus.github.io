@@ -24,10 +24,7 @@ jobs:
       # HTML-tag verification is also baked into lib/site.ts so GSC works even
       # if this variable is unset. Keep both in sync if Google rotates the token.
       NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION: ${{ vars.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }}
-      # Uncomment when the fly.io agent URL exists so voice/terminal reach it.
-      # NEXT_PUBLIC_AGENT_URL: https://<fly-app>.fly.dev
-      # Uncomment once the Feature 07 voice agent is deployed to Fly.io:
-      # NEXT_PUBLIC_AGENT_URL: https://<fly-app>.fly.dev
+      NEXT_PUBLIC_AGENT_URL: https://paymanshusgithubio-production.up.railway.app
     steps:
       - name: Checkout
         uses: actions/checkout@v4

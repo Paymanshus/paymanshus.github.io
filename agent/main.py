@@ -6,7 +6,7 @@ questions about his resume and experience via voice.
 
 Pipeline: Deepgram STT → Gemini LLM (fallback chain) → Cartesia TTS (→ Deepgram Aura fallback)
 VAD: Silero (local)
-Turn detection: LiveKit Multilingual Model
+Turn detection: LiveKit Multilingual Model locally; Silero VAD on Railway unless VOICE_TURN_DETECTOR=true
 
 Latency design (see readmes/SPECs/TECH_SPEC.md):
 - No LLM tool round-trip: resume context is injected per-turn via
@@ -37,7 +37,6 @@ from livekit.agents import (
     tts as lk_tts,
 )
 from livekit.plugins import google, deepgram, cartesia, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from resume_context import get_resume_index
 from token_server import create_token_app
 from observability import setup_voice_tracing, attach_usage_reporter
@@ -48,6 +47,57 @@ load_dotenv(".env.local")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voice-agent")
+
+
+def http_listen_port() -> int:
+    """Port for /api/token, /api/chat, /api/health.
+
+    On Railway the public hostname proxies to PORT, so PORT wins there even
+    if TOKEN_SERVER_PORT=8080 was copied from .env.local. Elsewhere
+    TOKEN_SERVER_PORT still wins (local docker -p 8080:8080).
+    """
+    if os.environ.get("RAILWAY_ENVIRONMENT"):
+        return int(os.environ.get("PORT") or os.environ.get("TOKEN_SERVER_PORT") or "8080")
+    return int(os.environ.get("TOKEN_SERVER_PORT") or os.environ.get("PORT") or "8080")
+
+
+def _env_flag(name: str) -> bool | None:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return None
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def use_turn_detector() -> bool:
+    """Whether to load LiveKit's multilingual EOU model.
+
+    Importing that plugin registers an inference subprocess (~500MB+). On
+    Railway Trial/Free that child is OOM-killed and the worker dies with
+    DuplexClosed before it can register with LiveKit. Explicit
+    VOICE_TURN_DETECTOR=true/false always wins; if unset, skip it when
+    RAILWAY_ENVIRONMENT is set.
+    """
+    explicit = _env_flag("VOICE_TURN_DETECTOR")
+    if explicit is not None:
+        return explicit
+    return not bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+
+
+def _turn_handling() -> TurnHandlingOptions:
+    endpointing = {
+        "min_delay": float(os.environ.get("MIN_ENDPOINTING_DELAY", "0.4")),
+    }
+    if not use_turn_detector():
+        logger.info("Turn detector off — Silero VAD endpointing only")
+        return TurnHandlingOptions(endpointing=endpointing)
+
+    from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
+    return TurnHandlingOptions(
+        turn_detection=MultilingualModel(),
+        endpointing=endpointing,
+    )
+
 
 # ─── Model configuration ───────────────────────────────────────────
 # The LLM ladder now lives in llm_models.VOICE_LADDER (env var: VOICE_LADDER),
@@ -123,7 +173,20 @@ class PaymanshuAgent(Agent):
 
 # ─── Server & Session Setup ────────────────────────────────────────
 
-server = AgentServer()
+def idle_process_count() -> int:
+    """Job-process pool size. LiveKit's start-mode default is 16, which OOMs
+    a 0.5–1GB Railway box before any visitor connects."""
+    raw = os.environ.get("AGENT_IDLE_PROCESSES")
+    if raw is not None and raw.strip():
+        return int(raw)
+    return 0
+
+
+# Slow hosts need more than the default 10s; do not pre-spawn 16 job processes.
+server = AgentServer(
+    initialize_process_timeout=120.0,
+    num_idle_processes=idle_process_count(),
+)
 
 
 @server.rtc_session(agent_name="paymanshu-voice")
@@ -224,15 +287,11 @@ async def voice_agent(ctx: agents.JobContext):
         llm=llm_model,
         tts=tts_model,
         vad=vad_model,
-        turn_handling=TurnHandlingOptions(
-            turn_detection=MultilingualModel(),
-            # Default min_delay is 0.5s; 0.4s trades a little interruption
-            # risk for snap. Migrated off the deprecated top-level
-            # min_endpointing_delay kwarg (removed in livekit-agents 2.0).
-            endpointing={
-                "min_delay": float(os.environ.get("MIN_ENDPOINTING_DELAY", "0.4")),
-            },
-        ),
+        # Default min_delay is 0.5s; 0.4s trades a little interruption
+        # risk for snap. Migrated off the deprecated top-level
+        # min_endpointing_delay kwarg (removed in livekit-agents 2.0).
+        # Multilingual EOU is skipped on Railway unless VOICE_TURN_DETECTOR=true.
+        turn_handling=_turn_handling(),
         # Start LLM+TTS on the interim transcript while endpointing is still
         # confirming end-of-turn — hides most LLM TTFT inside the wait.
         preemptive_generation=True,
@@ -269,11 +328,17 @@ def _run_token_server() -> None:
     a dedicated daemon thread. aiohttp's web.run_app creates a fresh loop when
     none exists in the thread.
     """
-    port = int(os.environ.get("TOKEN_SERVER_PORT", "8080"))
-    web.run_app(create_token_app(), port=port, handle_signals=False, print=None)
+    port = http_listen_port()
+    web.run_app(
+        create_token_app(),
+        host="0.0.0.0",
+        port=port,
+        handle_signals=False,
+        print=None,
+    )
 
 
 if __name__ == "__main__":
     threading.Thread(target=_run_token_server, daemon=True, name="token-server").start()
-    logger.info("Token server thread started on :%s", os.environ.get("TOKEN_SERVER_PORT", "8080"))
+    logger.info("Token server thread started on :%s", http_listen_port())
     agents.cli.run_app(server)
