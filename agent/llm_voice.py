@@ -48,6 +48,10 @@ class BreakerGuard(lk_llm.LLM):
         super().__init__()
         self._inner = inner
         self._entry = entry
+        # Last exception from the wrapped stream, if any. FallbackAdapter's
+        # availability event does not carry the upstream body, so we remember
+        # it here for record_voice_unavailable to classify 401 vs 5xx.
+        self._last_error: BaseException | None = None
 
     @property
     def model(self) -> str:
@@ -72,10 +76,35 @@ class BreakerGuard(lk_llm.LLM):
                 status_code=429,
                 retryable=False,
             )
-        return self._inner.chat(**kwargs)
+        stream = self._inner.chat(**kwargs)
+        orig_run = getattr(stream, "_run", None)
+        if orig_run is None:
+            return stream
+
+        async def _run_and_remember(_orig=orig_run, _guard=self):
+            try:
+                return await _orig()
+            except Exception as e:
+                _guard._last_error = e
+                raise
+
+        stream._run = _run_and_remember
+        return stream
 
     async def aclose(self) -> None:
         await self._inner.aclose()
+
+
+def _gemini_http_options():
+    """Pin Google's HTTP deadline ≥10s so FallbackAdapter's 5s attempt_timeout
+    cannot leak through as `Manually set deadline 5s is too short`."""
+    timeout_ms = llm_models.gemini_http_timeout_ms("voice")
+    try:
+        from google.genai import types as genai_types
+
+        return genai_types.HttpOptions(timeout=timeout_ms)
+    except Exception:
+        return {"timeout": timeout_ms}
 
 
 def _build_one(entry: llm_models.LadderEntry, *, max_output_tokens: int, temperature: float):
@@ -85,21 +114,24 @@ def _build_one(entry: llm_models.LadderEntry, *, max_output_tokens: int, tempera
             "model": entry.model,
             "max_output_tokens": max_output_tokens,
             "temperature": temperature,
+            "http_options": _gemini_http_options(),
         }
         # Thinking tokens are charged against the output budget, so leaving it on
-        # under a ~140-token cap truncates spoken replies mid-sentence. Same
-        # reasoning as llm_models.GEMINI_THINKING_BUDGET; the `-latest` aliases
-        # reject the field entirely, hence the guard.
-        if llm_models.gemini_supports_thinking_config(entry.model):
-            kwargs["thinking_config"] = {
-                "thinking_budget": llm_models.GEMINI_THINKING_BUDGET
-            }
+        # under a ~140-token cap truncates spoken replies mid-sentence. Gemini 3
+        # wants thinking_level; 2.5 wants thinking_budget. Rolling `-latest`
+        # aliases reject the field entirely.
+        thinking = llm_models.gemini_thinking_config(entry.model)
+        if thinking is not None:
+            kwargs["thinking_config"] = thinking
         try:
             return google.LLM(**kwargs)
         except TypeError:
-            # Older plugin versions don't accept thinking_config.
-            kwargs.pop("thinking_config", None)
-            return google.LLM(**kwargs)
+            kwargs.pop("http_options", None)
+            try:
+                return google.LLM(**kwargs)
+            except TypeError:
+                kwargs.pop("thinking_config", None)
+                return google.LLM(**kwargs)
 
     if entry.provider == "openrouter":
         from livekit.plugins import openai as lk_openai
@@ -158,22 +190,73 @@ def build_voice_llm(*, max_output_tokens: int, temperature: float = 0.6):
     )
     if len(instances) == 1:
         return instances[0]
-    return lk_llm.FallbackAdapter(instances)
+    # Default attempt_timeout is 5s; Google rejects that as the HTTP deadline.
+    attempt_s = llm_models.gemini_http_timeout_ms("voice") / 1000.0
+    return lk_llm.FallbackAdapter(instances, attempt_timeout=attempt_s)
 
 
-def record_voice_unavailable(llm_instance) -> None:
+def classify_voice_failure(entry: llm_models.LadderEntry, error=None) -> llm_ladder.LLMError | None:
+    """Map a LiveKit voice failure onto a breaker error, or None to not lock.
+
+    FallbackAdapter only tells us "this LLM became unavailable". When we have
+    the upstream exception (BreakerGuard._last_error, or event.error), classify
+    it the same way the terminal path does: 401/403 is a dead key, a Gemini
+    deadline-too-short 400 is a config bug and must not look like a 5xx.
+    """
+    text = str(error or "")
+    low = text.lower()
+    status = getattr(error, "status_code", None)
+    if status is None:
+        # livekit.agents.APIStatusError and openai.BadRequestError both expose this.
+        status = getattr(error, "status", None)
+        if isinstance(status, str) and status.isdigit():
+            status = int(status)
+
+    if "deadline" in low and "too short" in low:
+        return None
+    if status == 400 and "deadline" in low:
+        return None
+
+    if entry.provider == "openrouter" or "openrouter" in low:
+        if (
+            status in (401, 403)
+            or "401" in text
+            or "403" in text
+            or "user not found" in low
+        ):
+            return llm_ladder.LLMError(
+                llm_ladder.KIND_CREDITS,
+                "openrouter auth failure: 'User not found' usually means "
+                "OPENROUTER_API_KEY holds a PROVISIONING key; it must be a "
+                "runtime key (see agent/RUN.md)",
+            )
+
+    if status == 400:
+        # Other client errors (wrong thinking_config, etc.) are not outages.
+        return None
+
+    return llm_ladder.LLMError(
+        llm_ladder.KIND_SERVER, f"voice reported {entry.label} unavailable"
+    )
+
+
+def record_voice_unavailable(llm_instance, error=None) -> None:
     """Feed a LiveKit availability-change back into the shared breaker.
 
-    Coarse by necessity — see the module docstring. A short transient lock is
-    enough to stop the terminal path immediately re-probing an entry that voice
-    just found broken.
+    Uses BreakerGuard._last_error when the availability event has no body, so
+    an OpenRouter 401 locks as KIND_CREDITS (24h) instead of hammering every 20s.
     """
     entry = getattr(llm_instance, "_entry", None)
     if entry is None:
         return
-    llm_ladder.breaker.record_failure(
-        entry,
-        llm_ladder.LLMError(
-            llm_ladder.KIND_SERVER, f"voice reported {entry.label} unavailable"
-        ),
-    )
+    if error is None:
+        error = getattr(llm_instance, "_last_error", None)
+    classified = classify_voice_failure(entry, error)
+    if classified is None:
+        logger.warning(
+            "voice: not locking %s after client error: %s",
+            entry.label,
+            str(error)[:160] if error else "(no body)",
+        )
+        return
+    llm_ladder.breaker.record_failure(entry, classified)

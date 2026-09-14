@@ -80,8 +80,10 @@ The home route is a no-scroll hero state. The experience and thoughts routes are
     subsequent visits.
   - Thinking indicator: rotating verb from `THINKING_WORDS` (Claude-Code-style)
     shown while agent state is `thinking`.
-  - Degradation banner: reads agent participant attributes `voice.tts` /
-    `voice.llm` and shows an amber banner for fallback/down states.
+  - Degradation: reads agent participant attributes `voice.tts` / `voice.llm`.
+    LLM fallback and TTS degraded show a 6px amber square next to the
+    listening indicator (`title` = fallback model/voice). TTS down still uses
+    the amber top-center banner — output is actually gone.
 
 ### Thoughts route
 
@@ -415,11 +417,18 @@ concurrent visitors each rediscovered the same 429.
   stable system prefix and the BM25 result in the user turn, keeping BM25
   exercised while making the prefix cacheable. Compare layouts with
   `tests/eval_context_modes.py`.
-- **Gemini thinking** — `GEMINI_THINKING_BUDGET=0` is required, not an
-  optimisation: thinking tokens are charged against `max_output_tokens`, so with
-  thinking on and a 200-token cap, 190 tokens went to reasoning and replies came
-  back truncated mid-sentence. The `-latest` aliases reject the field with 400,
-  so it is withheld from them (and the ladder retries without it on a 400).
+- **Gemini thinking** — thinking tokens are charged against `max_output_tokens`,
+  so a tight cap with thinking on truncates spoken/written replies mid-sentence.
+  Gemini 3 models (`gemini-3.*`) get `thinking_level: "minimal"`; 2.5 and
+  earlier get `thinking_budget: 0`. Rolling `-latest` aliases reject the field
+  with 400, so it is withheld from them (and the ladder retries without it on a
+  400).
+- **Gemini HTTP deadline** — Google rejects deadlines under 10s
+  (`Manually set deadline 5s is too short`). LiveKit's `FallbackAdapter`
+  defaults `attempt_timeout=5.0`, which used to leak through as the request
+  deadline. Voice now passes `http_options.timeout ≥ 10000` on `google.LLM` and
+  constructs the adapter with `attempt_timeout` matching
+  `LLM_TIMEOUT_MS_VOICE` (default 10000, floored at 10s).
 
 ### Runtime architecture
 
@@ -448,16 +457,21 @@ Browser ←—WebRTC—→ LiveKit Cloud SFU ←—WebRTC—→ agent/main.py
   1-2 sentence persona for short spoken replies.
 - **Degradation signaling**: `FallbackAdapter` `*_availability_changed` events
   publish participant attributes (`voice.tts`: ok/degraded/down, `voice.llm`:
-  ok/fallback); `VoiceResume.tsx` renders these as an amber status banner —
-  rate limits are never silent.
+  ok/fallback). `VoiceResume.tsx` shows a 6px amber square next to the
+  listening indicator for LLM fallback / TTS degraded; TTS `down` still gets
+  the amber banner. OpenRouter 401s lock as `KIND_CREDITS` (24h) rather than a
+  20s `server_error` retry loop. Gemini deadline-too-short 400s are not locked.
 - Greeting via `session.generate_reply()` with `session.say()` fallback
+- **Prewarm** (`server.setup_fnc`): builds the resume BM25 index and imports
+  `httpcore` + `livekit.plugins.openai` so those ~1s first-use imports do not
+  block the session event loop. Silero still loads in the session.
 
 `resume_context.py` key components:
 - `ContentIndex` — generic BM25 index; accepts optional `section_tags` and `query_synonyms` params (doc-agnostic; resume config passed in, not hardcoded); each `Section` records `source_file` for future multi-source routing
 - Scoring tokens: `content + heading` only — `path_str` excluded to prevent heading-token inflation (e.g. `"AI"` from `"Awarathon — AI Intern"` path no longer distorts ranking)
 - `RESUME_SECTION_TAGS` — injected at index time; anchors conversational vocab to sections (`"college"` → Education, `"current"/"recent"` → Maersk)
 - `RESUME_QUERY_SYNONYMS` — expanded at query time; bridges abbreviation gaps (`"college"` → `["education", "university"]`, `"ml"` → `["machine", "learning"]`)
-- `get_resume_index()` — singleton over `content/resumedump.md` with resume-specific config; path resolved from `__file__` so it works from any working directory
+- `get_resume_index()` — singleton over `content/resumedump.md` with resume-specific config. Path candidates (first existing wins): `RESUME_CONTENT_PATH`, `<agent-dir>/content/resumedump.md` (Docker `/app/content/...`), `<repo>/content/resumedump.md` (local). The Docker image copies agent files into `/app`, so `__file__.parent.parent` is `/` and must not be the only lookup.
 - Future expansion: `ContentIndex("content/blog/", label="blog")` with its own optional config; no class changes needed
 
 **BM25 empirical findings** (50-test suite with realistic voice queries):

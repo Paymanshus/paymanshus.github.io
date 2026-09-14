@@ -424,9 +424,12 @@ def _gemini_config(
         model not in _no_thinking_config
         and llm_models.gemini_supports_thinking_config(model)
     ):
-        # Without this, thinking tokens eat max_output_tokens and replies come
-        # back truncated mid-sentence. See llm_models.GEMINI_THINKING_BUDGET.
-        config["thinking_config"] = {"thinking_budget": llm_models.GEMINI_THINKING_BUDGET}
+        # Gemini 3 wants thinking_level; 2.5 wants thinking_budget=0 so
+        # thinking tokens cannot eat max_output_tokens. See
+        # llm_models.gemini_thinking_config.
+        thinking = llm_models.gemini_thinking_config(model)
+        if thinking is not None:
+            config["thinking_config"] = thinking
     return config
 
 

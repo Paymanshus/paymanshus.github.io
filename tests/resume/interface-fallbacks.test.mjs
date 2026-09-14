@@ -135,6 +135,21 @@ test('plural stems are not broken by a trailing word boundary', () => {
 
 // ─── 3. Agent availability is checked before the mic prompt ───────────
 
+test('LLM fallback is a mark next to listening, not a full banner', () => {
+  assert.equal(
+    /model rate-limited — running on fallback model/.test(VOICE_SRC),
+    false,
+    'the greeting-turn failover must not show a full-width rate-limit banner'
+  );
+  assert.match(VOICE_SRC, /showFallbackMark/);
+  assert.match(VOICE_SRC, /fallback model/);
+  assert.match(
+    VOICE_SRC,
+    /voice output unavailable/,
+    'TTS-down still needs the banner — output is actually gone'
+  );
+});
+
 test('handleStart checks agent availability before touching the microphone', () => {
   const start = VOICE_SRC.slice(
     VOICE_SRC.indexOf('const handleStart'),

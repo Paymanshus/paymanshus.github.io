@@ -193,12 +193,12 @@ Now a live LiveKit WebRTC session, no longer a scripted demo.
   - **Thinking**: slow inward spiral, dim amber accent
   - **Idle**: gentle drift, low-intensity red center
 - Accent color crossfades gradually between states (no hard color snaps)
-- Top-left session status dot + label (listening = red, speaking = green, thinking = amber)
+- Top-left session status dot + label (listening = red, speaking = green, thinking = amber). LLM fallback and TTS degraded add a 6px amber square next to that label (`title`/`aria-label` = "fallback model" or "fallback voice") — no full-width banner on greeting-turn failover
 - While thinking: a rotating quirky-but-not-cartoony verb ("Rummaging…",
   "Cross-referencing…", "Jogging my memory…") pulses under the field —
   Claude Code register, one word picked per thinking episode
 - Live rolling monospace transcript below the field: agent lines with red `>` prefix, user lines quieter with `~` prefix. Consecutive STT chunks from one speaker merge into a single flowing line — never bullet-like fragments; a new line starts only on turn change
-- Rate limits and provider failures are never silent: an amber top-center banner reads "model rate-limited — running on fallback model" / "voice degraded — running on fallback voice" / "voice output unavailable — try the chat tab"
+- TTS down is the one remaining banner: "voice output unavailable — provider limits hit. try the chat tab"
 - The mic-permission modal appears only on the first ever connect on a device; afterwards Start Voice connects directly
 - `[ ESC TO DISCONNECT ]` anchored at the bottom — both the key and the label work
 

@@ -412,11 +412,37 @@ async def test_latest_aliases_do_not_get_thinking_config():
 async def test_thinking_budget_included_for_supporting_models():
     """Without this, thinking tokens consume max_output_tokens and replies come
     back truncated mid-sentence."""
-    cfg = llm_ladder._gemini_config("gemini-3.5-flash", "sys", 200, 0.6)
+    cfg = llm_ladder._gemini_config("gemini-2.5-flash", "sys", 200, 0.6)
     assert cfg["thinking_config"] == {"thinking_budget": llm_models.GEMINI_THINKING_BUDGET}
+
+    cfg = llm_ladder._gemini_config("gemini-3.5-flash", "sys", 200, 0.6)
+    assert cfg["thinking_config"] == {"thinking_level": "minimal"}
+
+    cfg = llm_ladder._gemini_config("gemini-3.1-flash-lite", "sys", 200, 0.6)
+    assert cfg["thinking_config"] == {"thinking_level": "minimal"}
 
     cfg = llm_ladder._gemini_config("gemini-flash-lite-latest", "sys", 200, 0.6)
     assert "thinking_config" not in cfg
+
+
+async def test_gemini_thinking_config_helper():
+    assert llm_models.gemini_thinking_config("gemini-2.5-flash") == {
+        "thinking_budget": llm_models.GEMINI_THINKING_BUDGET
+    }
+    assert llm_models.gemini_thinking_config("gemini-3.1-flash-lite") == {
+        "thinking_level": "minimal"
+    }
+    assert llm_models.gemini_thinking_config("gemini-flash-lite-latest") is None
+
+
+async def test_gemini_http_timeout_meets_google_floor():
+    assert llm_models.TIMEOUT_MS["voice"] >= llm_models.GEMINI_MIN_HTTP_TIMEOUT_MS
+    assert llm_models.gemini_http_timeout_ms("voice") >= 10_000
+
+
+async def test_gemini_http_timeout_floor_survives_low_env(monkeypatch):
+    monkeypatch.setitem(llm_models.TIMEOUT_MS, "voice", 6000)
+    assert llm_models.gemini_http_timeout_ms("voice") == 10_000
 
 
 async def test_openrouter_body_shape():
@@ -494,6 +520,53 @@ async def test_voice_failure_feeds_the_shared_breaker(tmp_path, monkeypatch):
 
     llm_voice.record_voice_unavailable(llm_voice.BreakerGuard(_Inner(), entry))
     assert llm_ladder.breaker.is_locked(entry.key)
+
+
+async def test_voice_openrouter_401_locks_as_credits(tmp_path, monkeypatch):
+    """A provisioning key 401 must not re-probe every 20s."""
+    from livekit.agents import APIStatusError
+    import llm_voice
+
+    monkeypatch.setattr(llm_ladder, "breaker", llm_ladder.Breaker(tmp_path / "b.json"))
+    entry = llm_models.parse_entry("openrouter:nvidia/nemotron-3-nano-30b-a3b:free")
+
+    class _Inner:
+        async def aclose(self):
+            pass
+
+    guard = llm_voice.BreakerGuard(_Inner(), entry)
+    guard._last_error = APIStatusError(
+        "Error code: 401 - {'error': {'message': 'User not found.', 'code': 401}}",
+        status_code=401,
+        retryable=False,
+    )
+    llm_voice.record_voice_unavailable(guard)
+    assert llm_ladder.breaker.is_locked(entry.key)
+    snap = llm_ladder.breaker.snapshot()
+    assert snap[entry.key]["kind"] == llm_ladder.KIND_CREDITS
+    assert snap[entry.key]["seconds_left"] > 1000
+
+
+async def test_voice_deadline_400_does_not_lock(tmp_path, monkeypatch):
+    """Gemini's 5s-deadline 400 is a config bug, not an outage."""
+    from livekit.agents import APIStatusError
+    import llm_voice
+
+    monkeypatch.setattr(llm_ladder, "breaker", llm_ladder.Breaker(tmp_path / "b.json"))
+    entry = llm_models.parse_entry("gemini:gemini-3.1-flash-lite")
+
+    class _Inner:
+        async def aclose(self):
+            pass
+
+    guard = llm_voice.BreakerGuard(_Inner(), entry)
+    guard._last_error = APIStatusError(
+        "Manually set deadline 5s is too short. Minimum allowed deadline is 10s.",
+        status_code=400,
+        retryable=False,
+    )
+    llm_voice.record_voice_unavailable(guard)
+    assert not llm_ladder.breaker.is_locked(entry.key)
 
 
 async def test_record_voice_unavailable_ignores_unguarded_llm(tmp_path, monkeypatch):
