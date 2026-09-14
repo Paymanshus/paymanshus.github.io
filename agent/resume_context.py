@@ -30,6 +30,7 @@ BM25 formula (Okapi BM25):
   b  = 0.75 — document length normalization
 """
 
+import os
 import re
 import math
 import time
@@ -331,15 +332,55 @@ RESUME_QUERY_SYNONYMS: dict[str, list[str]] = {
 _indices: dict[str, ContentIndex] = {}
 
 
+def resume_dump_candidates(here: Path | None = None) -> list[Path]:
+    """Paths to try for resumedump.md, first existing wins.
+
+    Layouts we actually run:
+      1. RESUME_CONTENT_PATH — explicit override
+      2. <this dir>/content/resumedump.md — Docker: agent files are copied
+         into /app, so resume_context.py lives at /app/resume_context.py and
+         the Dockerfile places the dump at /app/content/resumedump.md
+      3. <this dir>/../content/resumedump.md — local: agent/resume_context.py
+         with the dump at repo-root content/resumedump.md
+    """
+    here = (here or Path(__file__).resolve().parent)
+    ordered: list[Path] = []
+    env = os.environ.get("RESUME_CONTENT_PATH", "").strip()
+    if env:
+        ordered.append(Path(env))
+    ordered.append(here / "content" / "resumedump.md")
+    ordered.append(here.parent / "content" / "resumedump.md")
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for p in ordered:
+        key = str(p)
+        if key not in seen:
+            seen.add(key)
+            unique.append(p)
+    return unique
+
+
+def resolve_resume_dump_path(here: Path | None = None) -> Path:
+    """Return the first candidate that exists, or raise with every path tried."""
+    tried = resume_dump_candidates(here)
+    for p in tried:
+        if p.exists():
+            return p
+    raise FileNotFoundError(
+        "Content file not found. Tried: " + ", ".join(str(p) for p in tried)
+    )
+
+
 def get_resume_index() -> ContentIndex:
     """Get (or create) the resume-only index singleton.
 
     Builds with RESUME_SECTION_TAGS and RESUME_QUERY_SYNONYMS for domain-
-    specific routing. Path is resolved relative to this file so it works
-    regardless of working directory (agent/ or project root).
+    specific routing. Path is resolved from this file (and RESUME_CONTENT_PATH)
+    so it works from a local `agent/` checkout and from the flattened Docker
+    image at /app.
     """
     if "resume" not in _indices:
-        resume_path = Path(__file__).parent.parent / "content" / "resumedump.md"
+        resume_path = resolve_resume_dump_path()
         _indices["resume"] = ContentIndex(
             str(resume_path),
             label="resume",

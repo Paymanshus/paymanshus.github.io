@@ -455,17 +455,20 @@ function ActiveVoiceSession({ onDisconnect }: { onDisconnect: () => void }) {
     [isThinking]
   );
 
-  // Degradation status published by the agent via participant attributes
+  // Degradation status published by the agent via participant attributes.
+  // LLM fallback / TTS degraded: a tiny amber mark next to the listening
+  // indicator (the full banner fired on the greeting-turn failover and read
+  // as an error). TTS down still gets the banner — output is actually gone.
   const ttsStatus = agentAttributes?.['voice.tts'];
   const llmStatus = agentAttributes?.['voice.llm'];
-  const degradedMessage =
-    ttsStatus === 'down'
-      ? 'voice output unavailable — provider limits hit. try the chat tab'
-      : ttsStatus === 'degraded'
-        ? 'voice degraded — running on fallback voice'
-        : llmStatus === 'fallback'
-          ? 'model rate-limited — running on fallback model'
-          : null;
+  const ttsDown = ttsStatus === 'down';
+  const showFallbackMark =
+    llmStatus === 'fallback' || ttsStatus === 'degraded';
+  const fallbackTitle =
+    ttsStatus === 'degraded' ? 'fallback voice' : 'fallback model';
+  const degradedMessage = ttsDown
+    ? 'voice output unavailable — provider limits hit. try the chat tab'
+    : null;
 
   const agentMediaTrack = (audioTrack as TrackReference | undefined)?.publication
     ?.track?.mediaStreamTrack;
@@ -502,9 +505,16 @@ function ActiveVoiceSession({ onDisconnect }: { onDisconnect: () => void }) {
         <span className="text-[#555555] text-[10px] tracking-[0.2em] uppercase">
           {waitingForAgent ? 'waiting for agent' : state}
         </span>
+        {showFallbackMark && (
+          <span
+            className="inline-block h-1.5 w-1.5 bg-amber-400/70"
+            title={fallbackTitle}
+            aria-label={fallbackTitle}
+          />
+        )}
       </div>
 
-      {/* Degradation banner — rate limits / provider failures, never silent */}
+      {/* TTS-down only — LLM fallback is the mark above, not a banner */}
       {degradedMessage && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 border border-amber-500/30 bg-amber-500/10 px-4 py-1.5">
           <span className="text-amber-400/90 text-[10px] tracking-[0.2em] uppercase">

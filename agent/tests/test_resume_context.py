@@ -22,9 +22,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from resume_context import (  # noqa: E402
     ContentIndex,
     get_resume_index,
+    resolve_resume_dump_path,
     RESUME_SECTION_TAGS,
     RESUME_QUERY_SYNONYMS,
 )
+import resume_context  # noqa: E402
 
 # Content lives at project_root/content/, one level above agent/
 CONTENT_DIR = Path(__file__).parent.parent.parent / "content"
@@ -436,6 +438,49 @@ class TestMultiSourceAPI:
     def test_missing_file_raises(self):
         with pytest.raises(FileNotFoundError):
             ContentIndex("./content/nonexistent.md", label="bad")
+
+
+class TestResumeDumpPath:
+    """Docker flattens agent/ into /app, so parent.parent is / not the repo root."""
+
+    def test_prefers_sidecar_content_docker_layout(self, tmp_path, monkeypatch):
+        sidecar = tmp_path / "content" / "resumedump.md"
+        sidecar.parent.mkdir()
+        sidecar.write_text("# Resume\n")
+        monkeypatch.delenv("RESUME_CONTENT_PATH", raising=False)
+        assert resolve_resume_dump_path(tmp_path) == sidecar
+
+    def test_falls_back_to_repo_layout(self, tmp_path, monkeypatch):
+        agent_dir = tmp_path / "agent"
+        agent_dir.mkdir()
+        dump = tmp_path / "content" / "resumedump.md"
+        dump.parent.mkdir()
+        dump.write_text("# Resume\n")
+        monkeypatch.delenv("RESUME_CONTENT_PATH", raising=False)
+        assert resolve_resume_dump_path(agent_dir) == dump
+
+    def test_env_override_wins(self, tmp_path, monkeypatch):
+        override = tmp_path / "custom.md"
+        override.write_text("# Resume\n")
+        monkeypatch.setenv("RESUME_CONTENT_PATH", str(override))
+        assert resolve_resume_dump_path(tmp_path / "missing") == override
+
+    def test_missing_lists_every_candidate(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("RESUME_CONTENT_PATH", raising=False)
+        with pytest.raises(FileNotFoundError, match="Tried:") as exc:
+            resolve_resume_dump_path(tmp_path / "nowhere")
+        assert "resumedump.md" in str(exc.value)
+
+    def test_get_resume_index_honours_env(self, tmp_path, monkeypatch):
+        dump = tmp_path / "r.md"
+        dump.write_text("# Paymanshu\n\n## Experience\n\nMaersk machine learning.\n")
+        monkeypatch.setenv("RESUME_CONTENT_PATH", str(dump))
+        resume_context._indices.pop("resume", None)
+        try:
+            idx = get_resume_index()
+            assert str(dump) in {s.source_file for s in idx.sections} or str(dump) in idx.full_text or dump.name in idx.sections[0].source_file
+        finally:
+            resume_context._indices.pop("resume", None)
 
 
 class TestScoredSearch:

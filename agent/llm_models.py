@@ -286,7 +286,10 @@ def openrouter_provider_prefs(surface: str) -> dict:
 # and let a hung fast rung fail quickly.
 TIMEOUT_MS = {
     "terminal": int(os.environ.get("LLM_TIMEOUT_MS_TERMINAL", "8000")),
-    "voice": int(os.environ.get("LLM_TIMEOUT_MS_VOICE", "6000")),
+    # Google Gemini rejects HTTP deadlines under 10s (INVALID_ARGUMENT).
+    # LiveKit's FallbackAdapter default attempt_timeout is 5s and used to leak
+    # that as the request deadline — see llm_voice + livekit/agents#3723.
+    "voice": int(os.environ.get("LLM_TIMEOUT_MS_VOICE", "10000")),
     # Offline batch, emitting a structured change-set. Latency is irrelevant.
     "sync": int(os.environ.get("LLM_TIMEOUT_MS_SYNC", "60000")),
 }
@@ -320,6 +323,10 @@ TERMINAL_TEMPERATURE = float(os.environ.get("TERMINAL_TEMPERATURE", "0.6"))
 # and raise max_output_tokens with it.
 GEMINI_THINKING_BUDGET = int(os.environ.get("GEMINI_THINKING_BUDGET", "0"))
 
+# Google's generateContent HTTP deadline floor. LiveKit FallbackAdapter's
+# attempt_timeout default is 5s, which Gemini now rejects as 400.
+GEMINI_MIN_HTTP_TIMEOUT_MS = 10_000
+
 # The rolling aliases reject `thinking_config` outright with
 # 400 INVALID_ARGUMENT, so it must not be sent to them. This is a starting guess,
 # not the enforcement — llm_ladder also retries without the field on a 400 and
@@ -329,6 +336,32 @@ NO_THINKING_CONFIG_SUFFIXES = ("-latest",)
 
 def gemini_supports_thinking_config(model: str) -> bool:
     return not model.endswith(NO_THINKING_CONFIG_SUFFIXES)
+
+
+def gemini_is_v3(model: str) -> bool:
+    """Gemini 3.x wants thinking_level, not thinking_budget."""
+    return "gemini-3" in model.lower()
+
+
+def gemini_thinking_config(model: str) -> dict | None:
+    """Per-model thinking_config, or None to omit the field.
+
+    Gemini 3 ignores thinking_budget (plugin warning) and wants thinking_level.
+    `minimal` is the fastest setting — the voice/terminal caps are too tight
+    for real thinking tokens. 2.5 and earlier still take thinking_budget=0.
+    Rolling `-latest` aliases reject the whole field.
+    """
+    if not gemini_supports_thinking_config(model):
+        return None
+    if gemini_is_v3(model):
+        return {"thinking_level": "minimal"}
+    return {"thinking_budget": GEMINI_THINKING_BUDGET}
+
+
+def gemini_http_timeout_ms(surface: str = "voice") -> int:
+    """HTTP deadline for google.LLM / FallbackAdapter, never under Google's 10s floor."""
+    configured = TIMEOUT_MS.get(surface, GEMINI_MIN_HTTP_TIMEOUT_MS)
+    return max(GEMINI_MIN_HTTP_TIMEOUT_MS, configured)
 
 
 def describe() -> str:

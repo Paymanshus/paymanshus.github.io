@@ -182,11 +182,26 @@ def idle_process_count() -> int:
     return 0
 
 
+def prewarm(proc) -> None:
+    """Load the resume index and heavy LLM plugin imports before any job.
+
+    LiveKit warns when httpcore / openai types import on first FallbackAdapter
+    hop — that lands on the session loop and stalls audio. setup_fnc runs in
+    the job process before the session starts. Silero stays in the session
+    (its loader is loop-bound). With AGENT_IDLE_PROCESSES=0 this still runs
+    per spawned job process, just not ahead of the first visitor.
+    """
+    get_resume_index()
+    import httpcore  # noqa: F401
+    from livekit.plugins import openai as _lk_openai  # noqa: F401
+
+
 # Slow hosts need more than the default 10s; do not pre-spawn 16 job processes.
 server = AgentServer(
     initialize_process_timeout=120.0,
     num_idle_processes=idle_process_count(),
 )
+server.setup_fnc = prewarm
 
 
 @server.rtc_session(agent_name="paymanshu-voice")
@@ -208,7 +223,8 @@ async def voice_agent(ctx: agents.JobContext):
 
     # ─── Degradation signaling ─────────────────────────────────
     # FallbackAdapter availability changes are pushed to the frontend via
-    # participant attributes; VoiceResume.tsx renders a status banner.
+    # participant attributes; VoiceResume.tsx renders LLM fallback as a mark
+    # next to listening, and TTS-down as an amber banner.
     def _publish_attrs(attrs: dict[str, str]) -> None:
         async def _set() -> None:
             try:
@@ -271,7 +287,9 @@ async def voice_agent(ctx: agents.JobContext):
             # Share the finding with the terminal path so it stops probing an
             # entry voice just found broken. Coarse (no quota scope available
             # here) — see llm_voice.record_voice_unavailable.
-            llm_voice.record_voice_unavailable(event.llm)
+            llm_voice.record_voice_unavailable(
+                event.llm, error=getattr(event, "error", None)
+            )
 
     tts_model.on("tts_availability_changed", _on_tts_availability)
     try:
