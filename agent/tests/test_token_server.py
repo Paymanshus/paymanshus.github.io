@@ -36,6 +36,23 @@ def reset_rate_limits(monkeypatch):
     token_server._global_minute_hits.clear()
     for key, value in TEST_ENV.items():
         monkeypatch.setenv(key, value)
+    # Never send real canary requests from tests.
+    monkeypatch.setattr(token_server.llm_health, "scheduler", FakeScheduler())
+
+
+class FakeScheduler:
+    def __init__(self):
+        self.kicks = 0
+        self.started = False
+
+    def kick(self, now=None):
+        self.kicks += 1
+
+    def start(self):
+        self.started = True
+
+    async def stop(self):
+        self.started = False
 
 
 @pytest_asyncio.fixture
@@ -74,6 +91,15 @@ async def test_token_minting(client):
     assert agents[0]["agentName"] == token_server.AGENT_NAME
     # Short-lived token
     assert payload["exp"] - payload["nbf"] <= token_server.TOKEN_TTL_SECONDS + 60
+
+
+async def test_token_minting_kicks_llm_canary(client):
+    """Minting a voice token checks the voice rungs before the job starts."""
+    scheduler = token_server.llm_health.scheduler
+    assert scheduler.started, "periodic canaries start with the app"
+    resp = await client.get("/api/token")
+    assert resp.status == 200
+    assert scheduler.kicks == 1
 
 
 async def test_token_rooms_are_unique(client):

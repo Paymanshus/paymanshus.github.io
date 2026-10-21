@@ -627,7 +627,5 @@ async def test_terminal_timeout_covers_a_full_generation():
     """Budget must be TTFT + generation, not TTFT alone: ~200 tokens at ~50 tok/s
     is ~4s of generation before first-token latency is even counted."""
     assert llm_models.TIMEOUT_MS["terminal"] >= 6000
-    slowest = max(
-        e.timeout_ms or llm_models.TIMEOUT_MS["terminal"] for e in llm_models.LLM_LADDER
-    )
-    assert slowest >= 12000, "the slow quality rung needs room to finish"
+    for e in llm_models.LLM_LADDER:
+        assert (e.timeout_ms or llm_models.TIMEOUT_MS["terminal"]) >= 6000, e.label

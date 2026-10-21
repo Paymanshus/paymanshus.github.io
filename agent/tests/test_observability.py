@@ -76,10 +76,18 @@ async def test_estimate_costs_defaults():
         stt_audio_duration=60.0,
         tts_characters_count=1000,
     )
-    assert costs["llm_usd"] == pytest.approx(0.30 + 2.50)
+    assert costs["llm_usd"] == pytest.approx(0.30 + 1.20)
     assert costs["stt_usd"] == pytest.approx(0.0077)
     assert costs["tts_usd"] == pytest.approx(0.03)
-    assert costs["total_usd"] == pytest.approx(2.8377)
+    assert costs["total_usd"] == pytest.approx(1.5377)
+
+
+async def test_per_model_llm_cost_replaces_flat_rate():
+    costs = observability.estimate_session_costs(
+        llm_prompt_tokens=1_000_000, llm_completion_tokens=1_000_000, llm_usd=0.0123,
+        llm_by_model={"x": {}},  # extra summary keys are ignored
+    )
+    assert costs["llm_usd"] == pytest.approx(0.0123)
 
 
 async def test_estimate_costs_env_override(monkeypatch):

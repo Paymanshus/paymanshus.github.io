@@ -543,6 +543,9 @@ def _openrouter_body(
         # Server-side fallback: OpenRouter walks this on rate-limit, context and
         # moderation errors, so free→paid escalation costs one round trip.
         body["models"] = list(entry.models)
+    reasoning = llm_models.openrouter_reasoning(entry, surface)
+    if reasoning is not None:
+        body["reasoning"] = reasoning
     if stream:
         body["stream"] = True
     if session_id:
@@ -712,6 +715,72 @@ async def call_entry(
             session=session,
         )
     raise LLMError(KIND_OTHER, f"unknown provider {entry.provider!r}")
+
+
+async def ping_entry(
+    entry: LadderEntry,
+    *,
+    surface: str = "voice",
+    timeout_ms: int | None = None,
+    session: aiohttp.ClientSession | None = None,
+) -> float:
+    """1-token health call; returns elapsed ms or raises a classified LLMError.
+
+    Same provider prefs and reasoning setting as a real request on `surface`, so
+    a canary exercises the routing a visitor would get. Doesn't touch the breaker.
+    """
+    timeout_ms = timeout_ms or llm_models.LLM_CANARY_TIMEOUT_MS
+    started = time.perf_counter()
+    if entry.provider == "openrouter":
+        if not openrouter_enabled():
+            raise LLMError(KIND_CREDITS, "openrouter disabled or unconfigured")
+        ctx = llm_context.BuiltContext(mode="ping", system="Reply with one word.",
+                                       turns=[{"role": "user", "text": "hi"}])
+        body = _openrouter_body(entry, ctx, surface=surface, max_tokens=1, temperature=0,
+                                stream=False, session_id=None)
+        headers = {
+            "Authorization": f"Bearer {os.environ.get('OPENROUTER_API_KEY', '').strip()}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": OPENROUTER_REFERER,
+            "X-Title": OPENROUTER_TITLE,
+        }
+        own_session = session is None
+        session = session or aiohttp.ClientSession()
+        try:
+            async with session.post(
+                f"{OPENROUTER_BASE_URL}/chat/completions", json=body, headers=headers,
+                timeout=aiohttp.ClientTimeout(total=timeout_ms / 1000),
+            ) as resp:
+                if resp.status >= 400:
+                    try:
+                        payload = await resp.json()
+                    except Exception:
+                        payload = {"error": {"message": (await resp.text())[:200]}}
+                    raise _classify_openrouter(resp.status, payload, resp.headers)
+                await resp.read()
+        except asyncio.TimeoutError:
+            raise LLMError(KIND_TIMEOUT, f"openrouter canary timed out after {timeout_ms}ms")
+        except aiohttp.ClientError as exc:
+            raise LLMError(KIND_SERVER, f"openrouter transport error: {exc}")
+        finally:
+            if own_session:
+                await session.close()
+    elif entry.provider == "gemini":
+        config = _gemini_config(entry.model, "Reply with one word.", 1, 0)
+        try:
+            await asyncio.wait_for(
+                _get_genai_client().aio.models.generate_content(
+                    model=entry.model, contents="hi", config=config
+                ),
+                timeout=timeout_ms / 1000,
+            )
+        except asyncio.TimeoutError:
+            raise LLMError(KIND_TIMEOUT, f"gemini canary timed out after {timeout_ms}ms")
+        except Exception as exc:
+            raise _classify_gemini(exc)
+    else:
+        raise LLMError(KIND_OTHER, f"unknown provider {entry.provider!r}")
+    return (time.perf_counter() - started) * 1000
 
 
 # ─── The walk ──────────────────────────────────────────────────────

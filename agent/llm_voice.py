@@ -24,16 +24,32 @@ DIRECTION OF INFORMATION
     which carries most of the request volume. Deliberate trade — wrapping
     LLMStream to classify voice errors precisely costs a lot of fragile code for
     a small gain.
+
+HEDGING (HedgedLLM)
+    Rungs 1 and 2 are wrapped in one HedgedLLM: rung 1 starts alone; if it has
+    produced no token after VOICE_HEDGE_AFTER_MS, rung 2 starts in parallel and
+    whichever streams first is spoken, the other is cancelled. If rung 1 fails
+    outright, rung 2 starts at once. No longer timeouts, no waiting: the visitor
+    never waits more than they would have without it.
+
+WARM-UP AND HEALTH
+    build_voice_llm orders the ladder by the canary results the token server
+    shares (llm_health) and fires a 1-token warm-up on the primary while the
+    session is still connecting: measured ~50-180 ms off DeepSeek 1017's
+    greeting, plus the job process's first-request import and connection cost.
 """
 
+import asyncio
+import dataclasses
 import os
 import time
 import logging
 
-from livekit.agents import APIStatusError
+from livekit.agents import APIConnectionError, APIStatusError
 from livekit.agents import llm as lk_llm
 from livekit.plugins import google
 
+import llm_health
 import llm_models
 import llm_ladder
 
@@ -76,6 +92,14 @@ class BreakerGuard(lk_llm.LLM):
                 status_code=429,
                 retryable=False,
             )
+        chat_ctx = kwargs.get("chat_ctx")
+        limit = llm_models.VOICE_MAX_CONTEXT_ITEMS
+        if chat_ctx is not None and limit > 0 and len(chat_ctx.items) > limit:
+            # A session left running keeps growing its context; cap what each
+            # call sends (keeps the system instructions). See llm_models.
+            trimmed = chat_ctx.copy()
+            trimmed.truncate(max_items=limit)
+            kwargs["chat_ctx"] = trimmed
         stream = self._inner.chat(**kwargs)
         orig_run = getattr(stream, "_run", None)
         if orig_run is None:
@@ -142,6 +166,11 @@ def _build_one(entry: llm_models.LadderEntry, *, max_output_tokens: int, tempera
         if len(entry.models) > 1:
             # Server-side free→paid escalation in a single round trip.
             extra_body["models"] = list(entry.models)
+        reasoning = llm_models.openrouter_reasoning(entry, "voice")
+        if reasoning is not None:
+            # Default-on reasoning (DeepSeek `high`, Haiku `medium`) is pure
+            # latency for a 35-word spoken answer. See llm_models.
+            extra_body["reasoning"] = reasoning
         return lk_openai.LLM(
             model=entry.model,
             base_url=llm_ladder.OPENROUTER_BASE_URL,
@@ -158,15 +187,258 @@ def _build_one(entry: llm_models.LadderEntry, *, max_output_tokens: int, tempera
     raise ValueError(f"unknown provider {entry.provider!r}")
 
 
-def build_voice_llm(*, max_output_tokens: int, temperature: float = 0.6):
-    """Build the voice LLM: VOICE_LADDER, each entry breaker-guarded, wrapped in
-    a FallbackAdapter.
+_END = object()
+
+
+def _has_output(chunk) -> bool:
+    delta = getattr(chunk, "delta", None)
+    return bool(delta and (delta.content or delta.tool_calls))
+
+
+class HedgedLLM(lk_llm.LLM):
+    """Rung 1 alone, then rung 1 and rung 2 racing after `hedge_after_s` with no
+    output; the first to stream wins. See the module docstring."""
+
+    def __init__(self, primary: lk_llm.LLM, backup: lk_llm.LLM, *,
+                 hedge_after_s: float, on_failure=None):
+        super().__init__()
+        self._primary = primary
+        self._backup = backup
+        self._hedge_after_s = hedge_after_s
+        # Called as on_failure(llm, error) for a rung that errored (not one that
+        # merely lost the race), so the shared breaker learns about it.
+        self._on_failure = on_failure
+        # Per-model totals for this session's cost summary (observability).
+        self.usage_totals: dict[str, dict] = {}
+
+    def _record_usage(self, llm: lk_llm.LLM, usage, ttft_ms: float, hedged: bool) -> None:
+        model = llm.model
+        prompt = getattr(usage, "prompt_tokens", 0) or 0
+        cached = getattr(usage, "prompt_cached_tokens", 0) or 0
+        out = getattr(usage, "completion_tokens", 0) or 0
+        usd = llm_models.estimate_llm_usd(model, prompt, cached, out)
+        t = self.usage_totals.setdefault(
+            model, {"calls": 0, "prompt_tokens": 0, "cached_tokens": 0,
+                    "completion_tokens": 0, "est_usd": 0.0 if usd is not None else None})
+        t["calls"] += 1
+        t["prompt_tokens"] += prompt
+        t["cached_tokens"] += cached
+        t["completion_tokens"] += out
+        if usd is not None and t["est_usd"] is not None:
+            t["est_usd"] += usd
+        logger.info(
+            "voice llm-usage model=%s ttft_ms=%.0f hedged=%s in=%d cached=%d out=%d est_usd=%s",
+            model, ttft_ms, hedged, prompt, cached, out,
+            f"{usd:.6f}" if usd is not None else "?",
+        )
+
+    @property
+    def model(self) -> str:
+        return self._primary.model
+
+    @property
+    def provider(self) -> str:
+        return self._primary.provider
+
+    @property
+    def label(self) -> str:
+        return f"hedged({self._primary.label}, {self._backup.label})"
+
+    def chat(self, *, chat_ctx, tools=None, conn_options=None, **kwargs) -> lk_llm.LLMStream:
+        if conn_options is None:
+            from livekit.agents import DEFAULT_API_CONNECT_OPTIONS
+            conn_options = DEFAULT_API_CONNECT_OPTIONS
+        return HedgedLLMStream(self, chat_ctx=chat_ctx, tools=tools or [],
+                               conn_options=conn_options, chat_kwargs=kwargs)
+
+    async def aclose(self) -> None:
+        await self._primary.aclose()
+        await self._backup.aclose()
+
+
+class HedgedLLMStream(lk_llm.LLMStream):
+    # Delegating stream, like FallbackLLMStream: the inner streams own the
+    # inference spans (LiveKit 1.8 reads these; 1.6 ignores them).
+    _llm_attempt_span_name = None
+    _genai_operation_name = None
+
+    def __init__(self, hedged: HedgedLLM, *, chat_ctx, tools, conn_options, chat_kwargs):
+        super().__init__(hedged, chat_ctx=chat_ctx, tools=tools, conn_options=conn_options)
+        self._hedged = hedged
+        self._chat_kwargs = chat_kwargs
+
+    async def _run(self) -> None:
+        h = self._hedged
+        inner_opts = dataclasses.replace(self._conn_options, max_retry=0)
+        events: asyncio.Queue = asyncio.Queue()
+        racers: dict[str, asyncio.Task] = {}
+        llms = {"primary": h._primary, "backup": h._backup}
+        buffers: dict[str, list] = {"primary": [], "backup": []}
+        errors: dict[str, BaseException] = {}
+        started = time.perf_counter()
+
+        def start(name: str) -> None:
+            async def pump() -> None:
+                try:
+                    async with llms[name].chat(
+                        chat_ctx=self._chat_ctx, tools=self._tools,
+                        conn_options=inner_opts, **self._chat_kwargs,
+                    ) as stream:
+                        async for chunk in stream:
+                            await events.put((name, chunk))
+                    await events.put((name, _END))
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    await events.put((name, e))
+
+            racers[name] = asyncio.create_task(pump(), name=f"llm-hedge-{name}")
+
+        def fail(name: str, err: BaseException) -> None:
+            errors[name] = err
+            llm = llms[name]
+            entry = getattr(llm, "_entry", None)
+            # A guard refusing a locked rung is the breaker talking, not news.
+            if entry is not None and llm_ladder.breaker.is_locked(entry.key):
+                return
+            logger.warning("voice hedge: %s failed: %s", llm.label, str(err)[:160])
+            if h._on_failure is not None:
+                h._on_failure(llm, err)
+
+        start("primary")
+        winner = None
+        try:
+            while winner is None:
+                timeout = None
+                if "backup" not in racers:
+                    timeout = max(0.0, h._hedge_after_s - (time.perf_counter() - started))
+                try:
+                    name, item = await asyncio.wait_for(events.get(), timeout)
+                except asyncio.TimeoutError:
+                    logger.info(
+                        "voice hedge: no token from %s after %.0fms, starting %s",
+                        h._primary.label, h._hedge_after_s * 1000, h._backup.label,
+                    )
+                    start("backup")
+                    continue
+                if item is _END or isinstance(item, BaseException):
+                    err = item if item is not _END else APIConnectionError(
+                        f"{llms[name].label} ended without output")
+                    fail(name, err)
+                    if "backup" not in racers:
+                        start("backup")  # primary is down: no reason to wait
+                    elif len(errors) == len(racers):
+                        raise APIConnectionError(
+                            f"both hedged rungs failed: {'; '.join(str(e)[:120] for e in errors.values())}"
+                        )
+                    continue
+                buffers[name].append(item)
+                if _has_output(item):
+                    winner = name
+
+            for name, task in racers.items():
+                if name != winner:
+                    task.cancel()
+            ttft_ms = (time.perf_counter() - started) * 1000
+            log = logger.info if ("backup" in racers or winner != "primary") else logger.debug
+            log("voice hedge: served by %s, first token %.0fms%s", llms[winner].label, ttft_ms,
+                " (hedged)" if "backup" in racers else "")
+            usage = None
+            for chunk in buffers[winner]:
+                usage = getattr(chunk, "usage", None) or usage
+                self._event_ch.send_nowait(chunk)
+            while True:
+                name, item = await events.get()
+                if name != winner:
+                    continue
+                if item is _END:
+                    h._record_usage(llms[winner], usage, ttft_ms, "backup" in racers)
+                    return
+                usage = getattr(item, "usage", None) or usage
+                if isinstance(item, BaseException):
+                    raise item if isinstance(item, APIConnectionError | APIStatusError) else \
+                        APIConnectionError(f"{llms[winner].label} failed mid-stream: {item}")
+                self._event_ch.send_nowait(item)
+        finally:
+            for task in racers.values():
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*racers.values(), return_exceptions=True)
+
+
+def usage_summary(llm) -> dict[str, dict]:
+    """Per-model token and cost totals recorded by this session's HedgedLLM."""
+    if isinstance(llm, HedgedLLM):
+        return llm.usage_totals
+    for inner in getattr(llm, "_llm_instances", None) or []:
+        if isinstance(inner, HedgedLLM):
+            return inner.usage_totals
+    return {}
+
+
+def primary_guard(llm) -> "BreakerGuard | None":
+    """The BreakerGuard a voice LLM will try first."""
+    if isinstance(llm, BreakerGuard):
+        return llm
+    if isinstance(llm, HedgedLLM):
+        return primary_guard(llm._primary)
+    instances = getattr(llm, "_llm_instances", None)  # FallbackAdapter
+    return primary_guard(instances[0]) if instances else None
+
+
+async def warm_up(llm, *, timeout_s: float = 3.0) -> float | None:
+    """1-token request on the primary rung's own client, so its connection,
+    imports and upstream routing are warm before the greeting. Returns ms, or None
+    if skipped or failed (a failed warm-up is recorded as a health result, so new
+    sessions demote the rung; this session's hedge covers the greeting)."""
+    guard = primary_guard(llm)
+    if guard is None or llm_ladder.breaker.is_locked(guard._entry.key):
+        return None
+    entry, inner = guard._entry, guard._inner
+    client = getattr(inner, "_client", None)
+    if client is None:
+        return None
+    started = time.perf_counter()
+    try:
+        if entry.provider == "openrouter":
+            extra_body = {"provider": llm_models.openrouter_provider_prefs("voice")}
+            reasoning = llm_models.openrouter_reasoning(entry, "voice")
+            if reasoning is not None:
+                extra_body["reasoning"] = reasoning
+            coro = client.chat.completions.create(
+                model=entry.model, messages=[{"role": "user", "content": "hi"}],
+                max_tokens=1, extra_body=extra_body,
+            )
+        else:
+            config = {"max_output_tokens": 1}
+            thinking = llm_models.gemini_thinking_config(entry.model)
+            if thinking is not None:
+                config["thinking_config"] = thinking
+            coro = client.aio.models.generate_content(model=entry.model, contents="hi", config=config)
+        await asyncio.wait_for(coro, timeout_s)
+    except Exception as e:
+        logger.warning("voice warm-up: %s failed: %s", entry.label, str(e)[:160] or type(e).__name__)
+        llm_health.record(entry, ok=False, ms=None, error=f"warm-up: {e!r}")
+        return None
+    ms = (time.perf_counter() - started) * 1000
+    logger.info("voice warm-up: %s %.0fms", entry.label, ms)
+    return ms
+
+
+_background: set[asyncio.Task] = set()
+
+
+def build_voice_llm(*, max_output_tokens: int, temperature: float = 0.6, warm: bool = True):
+    """Build the voice LLM: VOICE_LADDER ordered by canary health, each entry
+    breaker-guarded, rungs 1+2 hedged, the rest behind a FallbackAdapter.
 
     Entries whose provider isn't configured are dropped at build time rather than
     left in to fail — an unset OPENROUTER_API_KEY is "not available", not "broken".
+    With `warm`, a warm-up request on the primary starts in the background (it
+    runs while the session connects to the room, before the greeting).
     """
     instances = []
-    for entry in llm_models.VOICE_LADDER:
+    for entry in llm_health.order_by_health(llm_models.VOICE_LADDER):
         if entry.provider == "openrouter" and not llm_ladder.openrouter_enabled():
             logger.info("voice ladder: skipping %s (not configured)", entry.label)
             continue
@@ -188,11 +460,27 @@ def build_voice_llm(*, max_output_tokens: int, temperature: float = 0.6):
     logger.info(
         "voice ladder: %s", " → ".join(g._entry.label for g in instances)
     )
-    if len(instances) == 1:
-        return instances[0]
-    # Default attempt_timeout is 5s; Google rejects that as the HTTP deadline.
-    attempt_s = llm_models.gemini_http_timeout_ms("voice") / 1000.0
-    return lk_llm.FallbackAdapter(instances, attempt_timeout=attempt_s)
+    chain: list[lk_llm.LLM] = list(instances)
+    hedge_s = llm_models.VOICE_HEDGE_AFTER_MS / 1000.0
+    if len(instances) >= 2 and hedge_s > 0:
+        chain = [HedgedLLM(instances[0], instances[1], hedge_after_s=hedge_s,
+                           on_failure=record_voice_unavailable)] + instances[2:]
+    if len(chain) == 1:
+        llm = chain[0]
+    else:
+        # Default attempt_timeout is 5s; Google rejects that as the HTTP deadline.
+        attempt_s = llm_models.gemini_http_timeout_ms("voice") / 1000.0
+        llm = lk_llm.FallbackAdapter(chain, attempt_timeout=attempt_s)
+
+    if warm:
+        try:
+            task = asyncio.get_running_loop().create_task(warm_up(llm), name="voice-warm-up")
+        except RuntimeError:
+            pass  # no running loop (scripts, tests): nothing to warm for
+        else:
+            _background.add(task)
+            task.add_done_callback(_background.discard)
+    return llm
 
 
 def classify_voice_failure(entry: llm_models.LadderEntry, error=None) -> llm_ladder.LLMError | None:

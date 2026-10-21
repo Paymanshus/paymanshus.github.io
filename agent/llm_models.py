@@ -7,7 +7,7 @@ ladder, and the resume-sync ladder. Nothing else hardcodes a model name.
 LADDER FORMAT
     A ladder is an ordered list of entries, tried top to bottom. Each entry is:
 
-        provider:model[|model2|model3][@quota_group][~timeout_ms]
+        provider:model[|model2|model3][@quota_group][~timeout_ms][#effort]
 
     - `provider` is `gemini` or `openrouter`.
     - `model` is the provider's own slug. Note OpenRouter slugs contain colons
@@ -23,9 +23,13 @@ LADDER FORMAT
       Rungs differ by an order of magnitude (6s vs 0.6s to first token), so one
       shared timeout would either strangle the slow rung or let a hung fast rung
       stall the walk.
+    - `#effort` (OpenRouter only) sets that rung's `reasoning.effort`, overriding
+      the surface default (see OPENROUTER_REASONING_EFFORT). `#default` sends no
+      reasoning field at all, for models where `none` is rejected (reasoning is
+      mandatory, e.g. gpt-oss-120b).
 
     Example, as an env var:
-        LLM_LADDER="gemini:gemini-3.5-flash~15000,openrouter:x:free|deepseek/y,gemini:gemini-3.1-flash-lite"
+        LLM_LADDER="openrouter:anthropic/claude-haiku-5.5,openrouter:openai/gpt-oss-120b#low,gemini:gemini-flash-lite-latest"
 
 WHY A FLAT LIST
     Interleaving providers (gemini → deepseek → gemini-lite) is just list order,
@@ -56,6 +60,9 @@ logger = logging.getLogger("llm-models")
 
 VALID_PROVIDERS = ("gemini", "openrouter")
 
+# OpenRouter's `reasoning.effort` values, plus "default" = omit the field.
+REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max", "default")
+
 
 # ─── Ladder entries ────────────────────────────────────────────────
 
@@ -72,6 +79,9 @@ class LadderEntry:
     # A single shared timeout either strangles the slow rung or lets a hung fast
     # rung stall the whole walk.
     timeout_ms: int | None = None
+    # Per-rung OpenRouter `reasoning.effort` (`#effort` in the spec). None means
+    # "use the surface default"; "default" means "send no reasoning field".
+    reasoning: str | None = None
 
     @property
     def model(self) -> str:
@@ -106,7 +116,16 @@ def parse_entry(spec: str) -> LadderEntry:
         raise ValueError("empty ladder entry")
 
     # Suffixes are stripped before the models are split. OpenRouter slugs never
-    # contain '@' or '~'. Order matters: '~timeout' comes last in the spec.
+    # contain '@', '~' or '#'. Order matters: '#effort' comes last, then '~timeout'.
+    reasoning = None
+    if "#" in spec:
+        spec, raw_effort = spec.rsplit("#", 1)
+        reasoning = raw_effort.strip().lower()
+        if reasoning not in REASONING_EFFORTS:
+            raise ValueError(
+                f"unknown reasoning effort {raw_effort!r} (expected one of {REASONING_EFFORTS})"
+            )
+
     timeout_ms = None
     if "~" in spec:
         spec, raw_timeout = spec.rsplit("~", 1)
@@ -140,10 +159,14 @@ def parse_entry(spec: str) -> LadderEntry:
         raise ValueError(
             f"models[] arrays are OpenRouter-only, got {len(models)} models for {provider!r}"
         )
+    if reasoning is not None and provider != "openrouter":
+        raise ValueError(
+            f"#effort is OpenRouter-only (Gemini thinking is set per model), got {provider!r}"
+        )
 
     return LadderEntry(
         provider=provider, models=models,
-        quota_group=quota_group, timeout_ms=timeout_ms,
+        quota_group=quota_group, timeout_ms=timeout_ms, reasoning=reasoning,
     )
 
 
@@ -172,56 +195,46 @@ def _env_str_list(name: str, default: list[str]) -> tuple[str, ...]:
 
 
 # ─── The ladders ───────────────────────────────────────────────────
-# MEASURED TTFT, 2026-10-21, from the Oracle VM (ap-hyderabad-1), streaming,
-# real resume prompt (~2.9k input tokens), two rounds. Raw logs and notes:
-# readmes/perf/2026-10-21/ (local) and /opt/agent/perf/ on the VM.
-#   Gemini direct (AI Studio free tier):
-#     gemini-flash-lite-latest    1015 /  885 ms
-#     gemini-3.5-flash-lite       1299 /  904 ms
-#     gemini-2.5-flash-lite       1395 / 1156 ms   (implicit cache hit on round 2)
-#     gemini-3.1-flash-lite       2238 / 1365 ms
-#     gemini-2.5-flash            1810 / 1303 ms
-#     gemini-3-flash-preview      3954 / 2107 ms
-#     gemini-3.5-flash           TIMEOUT(30s) / 3090 ms   ← flaky
-#     gemini-3.6-flash            9409 / 5583 ms
-#     gemini-3.7/3.8-flash, gemma-4-*   timeouts / 500s
-#   OpenRouter (paid, voice prefs):
-#     google/gemini-2.5-flash-lite   915 ms   ~$0.0003/call
-#     google/gemini-3.1-flash-lite   964 ms
-#     deepseek/deepseek-v4.1-flash  1002 ms (terminal prefs: 1335 / 1812 ms)
-#     nvidia/nemotron-3-nano-30b-a3b 1047 ms
-#     every `:free` slug tried: provider errors / 429 / no endpoints
-# Earlier the same day (13:30 IST) AI Studio took 16-30s for a 5-token reply
-# from both the VM and a home connection, so Gemini direct can degrade for
-# hours: every ladder keeps a non-AI-Studio rung second.
+# MEASURED 2026-10-21 from the Oracle VM (ap-hyderabad-1): voice TTFT through the
+# real LiveKit plugin clients with the real voice prompt, 43 calls per finalist,
+# reasoning off. Full write-up: readmes/perf/2026-10-22/ (local).
+#   openrouter deepseek/deepseek-v4.1-flash-1017  p50 392  p95 1169  max 3579 ms
+#                                                 greeting p50 381 / p95 531 ms
+#   openrouter anthropic/claude-haiku-5.5         p50 866  p95 1197  max 1439 ms
+#   openrouter google/gemini-3.1-flash-lite       p50 838  p95 1171  max 1263 ms
+#   gemini (AI Studio free tier) 3.5-flash-lite   5.7 s on a warm answer; 5.2 and
+#     5.9 s turns in the first real call; 3.1-flash-lite 503/504 on 5 of 9 calls.
+# Terminal (full non-streamed reply): Haiku 5.5 ~1.4 s with the best answers,
+# DeepSeek 1017 ~0.7 s, gemini-3.5-flash 4-16 s with no better answers.
 #
-# 2.5-flash / 2.5-flash-lite are served again (they 404'd mid-2026), but are
-# not relied on as primaries in case that was a temporary reprieve.
-# `gemini-flash-lite-latest` is the rolling alias that survives sunsets, which
-# is why each ladder ends on it. `gemini-flash-latest` is NOT used: it once took
-# 84 seconds to answer "say hi in four words".
+# So OpenRouter leads both ladders and AI Studio direct is the last resort, kept
+# because it's free and survives an OpenRouter outage. `gemini-flash-lite-latest`
+# is the rolling alias that survives sunsets. `gemini-flash-latest` is NOT used:
+# it once took 84 seconds to answer "say hi in four words".
+#
+# Rejected in the same tests: mercury-3, nemotron-3.5-super-vl and gpt-oss-120b
+# each invented a fact about the owner; gpt-6-luna and qwen3.8-27b were slower
+# with a 2 s+ tail; mimo-v2.6-flash had a 6 s tail; glm-5.3-flash and
+# gemini-3.5-flash-lite (on OpenRouter) can't turn reasoning off.
 
-# Terminal chat: quality first — a recruiter reading a written answer will wait,
-# and 3.5-flash is the better model. But it timed out once in two probes, so its
-# timeout is tightened to ~12s (it answered in ~3.1s when healthy, ~6.3s in July) and a fast
-# paid rung follows. DeepSeek V4.1 Flash passes the terminal quantization
-# allow-list; Google models on OpenRouter do NOT (they report no quantization),
-# which is why they only appear on the voice ladder.
+# Terminal chat: Haiku first for answer quality (a recruiter reads it), DeepSeek
+# as a fast, cheap second. Haiku's $0.10/$0.50 price holds under 100k prompt
+# tokens; ours are 1-4k.
 LLM_LADDER = _env_ladder("LLM_LADDER", [
-    "gemini:gemini-3.5-flash~12000",
-    "openrouter:deepseek/deepseek-v4.1-flash",
-    "gemini:gemini-3.5-flash-lite",
+    "openrouter:anthropic/claude-haiku-5.5",
+    "openrouter:deepseek/deepseek-v4.1-flash-1017",
+    "openrouter:google/gemini-3.1-flash-lite",
     "gemini:gemini-flash-lite-latest",
 ])
 
-# Voice: latency first. 3.5-flash-lite is the fastest pinned Gemini model in the
-# 2026-10-21 probe. The second rung goes through OpenRouter so an AI Studio
-# slowdown doesn't take voice down with it; models[] falls through to DeepSeek
-# inside the same request. Spoken answers are capped at ~35 words, so the paid
-# rung costs fractions of a cent per turn.
+# Voice: latency first. DeepSeek 1017's first turn is its strongest point (greeting
+# p95 0.53 s); its rare ~3.5 s outliers are cut by the hedge in llm_voice, which
+# races rung 2 (Haiku, never above 1.44 s) when rung 1 has no first token after
+# VOICE_HEDGE_AFTER_MS.
 VOICE_LADDER = _env_ladder("VOICE_LADDER", [
-    "gemini:gemini-3.5-flash-lite",
-    "openrouter:google/gemini-2.5-flash-lite|deepseek/deepseek-v4.1-flash",
+    "openrouter:deepseek/deepseek-v4.1-flash-1017",
+    "openrouter:anthropic/claude-haiku-5.5",
+    "openrouter:google/gemini-3.1-flash-lite",
     "gemini:gemini-flash-lite-latest",
 ])
 
@@ -249,9 +262,32 @@ SYNC_LADDER = _env_ladder("SYNC_LADDER", [
 # Quantization allow-list is the real quality lever for terminal chat: without it
 # you can be routed to an int4 backend of the right model and get visibly worse
 # answers at the same price.
+# `unknown` is in the list because first-party endpoints (Anthropic, Google,
+# DeepSeek's own API, Together, Fireworks) don't publish a quantization; without
+# it every Haiku and Google endpoint is silently filtered out of terminal chat.
 TERMINAL_QUANTIZATIONS = _env_str_list(
-    "TERMINAL_QUANTIZATIONS", ["fp8", "fp16", "bf16"]
+    "TERMINAL_QUANTIZATIONS", ["fp8", "fp16", "bf16", "unknown"]
 )
+
+# Reasoning effort sent to OpenRouter per surface, unless a rung's `#effort`
+# overrides it. MEASURED 2026-10-21: DeepSeek v4.1 flash defaults to effort
+# `high` and Haiku 5.5 to `medium`; under a 200-token cap Haiku spent most of
+# the budget thinking and truncated 4 of 6 terminal answers mid-sentence. A
+# 35-word spoken answer and a short written one gain nothing from reasoning, so
+# both surfaces turn it off. Sync is left at the model's default (None = omit).
+OPENROUTER_REASONING_EFFORT = {
+    "voice": os.environ.get("OPENROUTER_REASONING_EFFORT_VOICE", "none"),
+    "terminal": os.environ.get("OPENROUTER_REASONING_EFFORT_TERMINAL", "none"),
+    "sync": os.environ.get("OPENROUTER_REASONING_EFFORT_SYNC") or None,
+}
+
+
+def openrouter_reasoning(entry: "LadderEntry", surface: str) -> dict | None:
+    """The `reasoning` object for an OpenRouter request, or None to omit it."""
+    effort = entry.reasoning or OPENROUTER_REASONING_EFFORT.get(surface)
+    if not effort or effort == "default":
+        return None
+    return {"effort": effort}
 
 # Routing-layer spend guard, in USD per million tokens. Independent of (and
 # secondary to) the per-key monthly limit on the OpenRouter provisioning key,
@@ -311,6 +347,64 @@ TIMEOUT_MS = {
 # Short backoff applied to an entry after a timeout or 5xx (as opposed to the
 # quota-derived lockouts, which are pinned to the upstream reset window).
 TRANSIENT_COOLDOWN_S = float(os.environ.get("LLM_TRANSIENT_COOLDOWN_S", "20"))
+
+# ─── Voice hedging and health ──────────────────────────────────────
+# Hedge, don't wait: if voice rung 1 has produced no token after this long, rung
+# 2 starts in parallel and whichever streams first is spoken. Never adds latency;
+# costs one duplicate short call on the turns past it. 1200 ms sits above
+# DeepSeek 1017's measured p95 (1169 ms), so it fires on ~5% of turns and
+# leaves normal slower answers alone. 0 disables hedging.
+VOICE_HEDGE_AFTER_MS = int(os.environ.get("VOICE_HEDGE_AFTER_MS", "1200"))
+
+# Canary: a 1-token call to the first rungs, run by the token server when a
+# visitor asks for a voice token (at most once per LLM_CANARY_MIN_GAP_S) and
+# every LLM_CANARY_INTERVAL_S. A rung whose canary failed or took longer than
+# LLM_CANARY_SLOW_MS counts as degraded for LLM_HEALTH_TTL_S, and new voice
+# sessions start on the next healthy rung. ~$0.000002 per canary.
+LLM_CANARY_INTERVAL_S = float(os.environ.get("LLM_CANARY_INTERVAL_S", "600"))
+LLM_CANARY_MIN_GAP_S = float(os.environ.get("LLM_CANARY_MIN_GAP_S", "60"))
+# A healthy non-streamed 1-token round trip measured 0.9-1.3 s (DeepSeek 915 ms,
+# Haiku 1176 ms on the VM, 2026-10-21), so "slow" is ~2x that, not the 1.2 s
+# hedge deadline, or ordinary variance would flap rungs between sessions.
+LLM_CANARY_SLOW_MS = float(os.environ.get("LLM_CANARY_SLOW_MS", "2500"))
+LLM_CANARY_TIMEOUT_MS = int(os.environ.get("LLM_CANARY_TIMEOUT_MS", "3000"))
+LLM_HEALTH_TTL_S = float(os.environ.get("LLM_HEALTH_TTL_S", "300"))
+
+# ─── Prompt-size guard ─────────────────────────────────────────────
+# Claude Haiku 5.5 bills $0.10/$0.50 per M tokens only while the prompt is under
+# 100k tokens; above that it's 5x ($0.50/$2.50). Our prompts are 1-4k, but a
+# voice session left running keeps appending turns to the chat context. Every
+# voice LLM call sends at most the last VOICE_MAX_CONTEXT_ITEMS items (system
+# instructions are always kept): ~40 short spoken turns plus one injected resume
+# is ~10-15k tokens, far from the 100k tier. Terminal history is already capped
+# in token_server (6 turns x 500 chars).
+VOICE_MAX_CONTEXT_ITEMS = int(os.environ.get("VOICE_MAX_CONTEXT_ITEMS", "40"))
+
+# ─── Price table for cost logging (USD per million tokens) ─────────
+# (input, cached input, output). OpenRouter prices vary by the provider it routes
+# to; these are the upper end of what `sort=latency` picked on 2026-10-21, so the
+# logged numbers are conservative. Gemini direct is the free tier. Unknown
+# models log tokens with no dollar figure rather than a made-up one.
+MODEL_PRICES_PER_M: dict[str, tuple[float, float, float]] = {
+    "deepseek/deepseek-v4.1-flash-1017": (0.30, 0.006, 1.20),
+    "deepseek/deepseek-v4.1-flash": (0.30, 0.006, 1.20),
+    "anthropic/claude-haiku-5.5": (0.10, 0.01, 0.50),
+    "google/gemini-3.1-flash-lite": (0.25, 0.025, 1.50),
+    "google/gemini-2.5-flash-lite": (0.10, 0.01, 0.40),
+    "gemini-flash-lite-latest": (0.0, 0.0, 0.0),
+    "gemini-3.5-flash-lite": (0.0, 0.0, 0.0),
+}
+
+
+def estimate_llm_usd(model: str, prompt_tokens: int, cached_tokens: int,
+                     completion_tokens: int) -> float | None:
+    """Estimated cost of one call, or None for a model not in the table."""
+    prices = MODEL_PRICES_PER_M.get(model)
+    if prices is None:
+        return None
+    p_in, p_cached, p_out = prices
+    uncached = max(0, (prompt_tokens or 0) - (cached_tokens or 0))
+    return (uncached * p_in + (cached_tokens or 0) * p_cached + (completion_tokens or 0) * p_out) / 1e6
 
 
 # ─── Generation config ─────────────────────────────────────────────
@@ -393,7 +487,14 @@ def describe() -> str:
                 extra.append(f"models[]={list(entry.models[1:])}")
             if entry.quota_group:
                 extra.append(f"quota_group={entry.quota_group}")
+            if entry.provider == "openrouter":
+                reasoning = openrouter_reasoning(entry, name)
+                extra.append(f"reasoning={reasoning['effort'] if reasoning else 'model default'}")
             extra.append(f"timeout={entry.timeout_ms or TIMEOUT_MS.get(name, '?')}ms")
             suffix = f"  ({', '.join(extra)})" if extra else ""
             lines.append(f"    {i}. {entry.label}{suffix}")
+    lines.append(
+        f"  voice hedge after {VOICE_HEDGE_AFTER_MS}ms; canary every {LLM_CANARY_INTERVAL_S:.0f}s "
+        f"(slow > {LLM_CANARY_SLOW_MS:.0f}ms); voice context <= {VOICE_MAX_CONTEXT_ITEMS} items"
+    )
     return "\n".join(lines)

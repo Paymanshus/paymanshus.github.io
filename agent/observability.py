@@ -126,10 +126,15 @@ def setup_voice_tracing(room_name: str):
 # session. Prices are USD estimates, overridable via env (see .env.example).
 
 _PRICE_DEFAULTS = {
-    "COST_LLM_INPUT_PER_1M": 0.30,  # gemini-2.5-flash input, paid tier
-    "COST_LLM_OUTPUT_PER_1M": 2.50,  # gemini-2.5-flash output, paid tier
+    # Fallback only: voice LLM cost normally comes from llm_voice's per-model
+    # accounting (real token counts x llm_models.MODEL_PRICES_PER_M).
+    "COST_LLM_INPUT_PER_1M": 0.30,
+    "COST_LLM_OUTPUT_PER_1M": 1.20,
     "COST_STT_PER_MIN": 0.0077,  # deepgram nova-3 streaming
-    "COST_TTS_PER_1K_CHARS": 0.03,  # cartesia sonic-3 (approx, plan-dependent)
+    # Cartesia bills 1 credit per character for sonic-3, cloned voices included;
+    # $/credit depends on the plan, so set COST_TTS_PER_1K_CHARS to your plan's
+    # rate (plan price / monthly credits x 1000).
+    "COST_TTS_PER_1K_CHARS": 0.03,
 }
 
 
@@ -146,12 +151,16 @@ def estimate_session_costs(
     llm_completion_tokens: int = 0,
     stt_audio_duration: float = 0.0,
     tts_characters_count: int = 0,
+    llm_usd: float | None = None,
+    **_ignored,
 ) -> dict:
-    """USD cost estimates for one voice session's usage summary."""
-    llm_usd = (
-        llm_prompt_tokens * _price("COST_LLM_INPUT_PER_1M")
-        + llm_completion_tokens * _price("COST_LLM_OUTPUT_PER_1M")
-    ) / 1_000_000
+    """USD cost estimates for one voice session's usage summary. `llm_usd`, when
+    known from per-model accounting, replaces the flat-rate LLM estimate."""
+    if llm_usd is None:
+        llm_usd = (
+            llm_prompt_tokens * _price("COST_LLM_INPUT_PER_1M")
+            + llm_completion_tokens * _price("COST_LLM_OUTPUT_PER_1M")
+        ) / 1_000_000
     stt_usd = (stt_audio_duration / 60.0) * _price("COST_STT_PER_MIN")
     tts_usd = (tts_characters_count / 1000.0) * _price("COST_TTS_PER_1K_CHARS")
     return {
@@ -206,7 +215,26 @@ def attach_usage_reporter(session, ctx, room_name: str):
         async def _report():
             try:
                 summary = _summarize(latest_usage["value"])
-                costs = estimate_session_costs(**summary)
+                llm_usd = None
+                try:
+                    import llm_voice
+
+                    by_model = llm_voice.usage_summary(getattr(session, "llm", None))
+                except Exception:
+                    by_model = {}
+                if by_model:
+                    # LiveKit's own LLM counters read 0 behind the fallback
+                    # adapter (first real call, 2026-10-21); ours are real.
+                    summary["llm_prompt_tokens"] = sum(m["prompt_tokens"] for m in by_model.values())
+                    summary["llm_cached_tokens"] = sum(m["cached_tokens"] for m in by_model.values())
+                    summary["llm_completion_tokens"] = sum(m["completion_tokens"] for m in by_model.values())
+                    known = [m["est_usd"] for m in by_model.values() if m["est_usd"] is not None]
+                    llm_usd = sum(known) if known else None
+                    summary["llm_by_model"] = {
+                        k: {**v, "est_usd": round(v["est_usd"], 6) if v["est_usd"] is not None else None}
+                        for k, v in by_model.items()
+                    }
+                costs = estimate_session_costs(**summary, llm_usd=llm_usd)
                 logger.info(
                     "Session usage (room=%s): %s | est costs: %s",
                     room_name,

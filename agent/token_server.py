@@ -33,6 +33,7 @@ from observability import get_langfuse, trace_attributes
 import observability
 import llm_models
 import llm_context
+import llm_health
 import llm_ladder
 from prompts import TERMINAL_PERSONA_BODY
 
@@ -185,6 +186,9 @@ async def generate_token(request: web.Request) -> web.Response:
         "Token minted: room=%s participant=%s origin=%s",
         room_name, participant_identity, request.headers.get("Origin", "unknown"),
     )
+    # The voice job starts a few seconds from now; check the first rungs so the
+    # session builds its ladder from fresh health (debounced; never awaited).
+    llm_health.scheduler.kick()
 
     # Both key styles so TokenSource.endpoint() and hand-rolled fetches work
     return web.json_response(
@@ -277,6 +281,18 @@ async def _generate_reply(ctx, *, session_id: str | None = None) -> tuple[str, s
     )
     if result is None:
         return "", None
+    usd = result.cost
+    if usd is None:
+        usd = llm_models.estimate_llm_usd(
+            result.resolved_model or "", result.prompt_tokens,
+            result.cached_tokens, result.completion_tokens,
+        )
+    logger.info(
+        "terminal llm-usage served=%s total_ms=%.0f in=%d cached=%d out=%d usd=%s attempts=%s",
+        result.resolved_model or result.entry_label, result.total_ms, result.prompt_tokens,
+        result.cached_tokens, result.completion_tokens,
+        f"{usd:.6f}" if usd is not None else "?", ",".join(result.attempts),
+    )
     return result.text, (result.resolved_model or result.entry_label)
 
 
@@ -364,8 +380,19 @@ async def _flush_observability(app: web.Application) -> None:
     observability.shutdown()
 
 
+async def _start_canaries(app: web.Application) -> None:
+    logger.info(llm_models.describe())
+    llm_health.scheduler.start()
+
+
+async def _stop_canaries(app: web.Application) -> None:
+    await llm_health.scheduler.stop()
+
+
 def create_token_app() -> web.Application:
     app = web.Application()
+    app.on_startup.append(_start_canaries)
+    app.on_cleanup.append(_stop_canaries)
     app.on_cleanup.append(_flush_observability)
     app.router.add_get("/api/token", generate_token)
     app.router.add_post("/api/token", generate_token)
