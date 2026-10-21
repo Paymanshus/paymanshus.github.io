@@ -83,15 +83,25 @@ def use_turn_detector() -> bool:
     return not bool(os.environ.get("RAILWAY_ENVIRONMENT"))
 
 
+# The turn-detector plugin must be imported here, in the main process, not
+# inside the job. Importing it registers the EOU inference runner (served from
+# the shared inference subprocess) and adds its model files to `download-files`,
+# which the Dockerfile runs at build time. Importing it lazily inside the job
+# skipped both: every voice job died with `Could not find file "languages.json"`
+# and the visitor sat on "summoning the agent" forever (Oracle VM, 2026-10-21).
+if use_turn_detector():
+    from livekit.plugins.turn_detector.multilingual import MultilingualModel
+else:
+    MultilingualModel = None
+
+
 def _turn_handling() -> TurnHandlingOptions:
     endpointing = {
         "min_delay": float(os.environ.get("MIN_ENDPOINTING_DELAY", "0.4")),
     }
-    if not use_turn_detector():
+    if MultilingualModel is None:
         logger.info("Turn detector off — Silero VAD endpointing only")
         return TurnHandlingOptions(endpointing=endpointing)
-
-    from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
     return TurnHandlingOptions(
         turn_detection=MultilingualModel(),
