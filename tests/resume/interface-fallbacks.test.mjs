@@ -156,11 +156,18 @@ test('handleStart checks agent availability before touching the microphone', () 
     VOICE_SRC.indexOf('switch (connState)')
   );
   const configuredIdx = start.indexOf('isAgentConfigured');
-  const reachableIdx = start.indexOf('isAgentReachable');
+  // fetchVoiceStatus is the reachability probe and the capacity check in one:
+  // null means unreachable (resting), available:false means unavailable.
+  const reachableIdx = start.indexOf('fetchVoiceStatus');
+  const unavailableIdx = start.indexOf('showUnavailable');
   const micIdx = start.indexOf('isMicAlreadyGranted');
 
   assert.ok(configuredIdx > -1, 'handleStart should check isAgentConfigured');
-  assert.ok(reachableIdx > -1, 'handleStart should probe isAgentReachable');
+  assert.ok(reachableIdx > -1, 'handleStart should probe fetchVoiceStatus');
+  assert.ok(
+    unavailableIdx > -1 && unavailableIdx < micIdx,
+    'a full or limited voice service must be reported before any microphone access'
+  );
   assert.ok(micIdx > -1, 'handleStart should still gate on mic permission');
   assert.ok(
     configuredIdx < micIdx && reachableIdx < micIdx,
@@ -200,4 +207,26 @@ test('the PDF tab always shows an escape hatch, not a blank frame', () => {
   );
   assert.match(pdf, /Inline preview unavailable/);
   assert.match(pdf, /Open the resume PDF/);
+});
+
+test('a refused token shows the unavailable view, not an error', () => {
+  const grant = VOICE_SRC.slice(
+    VOICE_SRC.indexOf('const handlePermissionGranted'),
+    VOICE_SRC.indexOf('const handleDisconnect')
+  );
+  assert.match(grant, /res\.status === 503/);
+  assert.match(grant, /showUnavailable\(data\.reason/);
+});
+
+test('an agent that never joins times out instead of summoning forever', () => {
+  assert.match(VOICE_SRC, /const AGENT_JOIN_TIMEOUT_MS = \d/);
+  assert.match(VOICE_SRC, /setTimeout\(onAgentNoShow, AGENT_JOIN_TIMEOUT_MS\)/);
+  assert.match(VOICE_SRC, /showUnavailable\('no_show'\)/);
+});
+
+test('every unavailable reason has copy and the terminal is offered', () => {
+  for (const reason of ['busy', 'monthly_limit', 'daily_limit', 'disabled', 'no_show']) {
+    assert.ok(VOICE_SRC.includes(`case '${reason}':`), `missing copy for ${reason}`);
+  }
+  assert.match(VOICE_SRC, /Open the terminal/);
 });

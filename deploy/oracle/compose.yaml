@@ -18,6 +18,19 @@ services:
       # for a cold Python + ONNX import. The turn detector stays on (default
       # off Railway).
       AGENT_IDLE_PROCESSES: "1"
+      # Voice availability (agent/voice_availability.py). LiveKit's free Build
+      # plan allows 5 concurrent agent sessions and 1,000 minutes a month; the
+      # cap and the minutes counter turn visitors away with an explanation
+      # instead of letting LiveKit leave them on "summoning the agent".
+      VOICE_MAX_CONCURRENT: "5"
+      VOICE_MONTHLY_MINUTES: "950"
+      VOICE_QUOTA_RESET_DAY: "1"
+      VOICE_STATE_DIR: /app/state
+      LLM_BREAKER_STATE_PATH: /app/state/llm_breaker.json
+    volumes:
+      # Minutes used, the "tell me when you're back" waitlist and the LLM
+      # breaker's daily locks. A named volume, so they survive rebuilds.
+      - agent_state:/app/state
     expose:
       - "8080"
     restart: unless-stopped
@@ -38,5 +51,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  agent_state:
   caddy_data:
   caddy_config:

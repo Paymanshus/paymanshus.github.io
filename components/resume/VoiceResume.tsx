@@ -12,12 +12,22 @@ import type { TrackReference } from '@livekit/components-react';
 import type { TrackPublication } from 'livekit-client';
 import { trackEvent } from '@/lib/analytics';
 
-import { agentEndpoint, isAgentConfigured, isAgentReachable } from '@/lib/agent';
+import {
+  agentEndpoint,
+  fetchVoiceStatus,
+  isAgentConfigured,
+  joinVoiceWaitlist,
+  type VoiceUnavailableReason,
+} from '@/lib/agent';
 
 // localStorage flag set after the first successful mic grant. The Permissions
 // API is the source of truth where supported; this flag covers browsers where
 // permissions.query({name:'microphone'}) throws (e.g. Firefox, older Safari).
 const MIC_GRANTED_KEY = 'ps-voice-mic-granted';
+
+// A granted token whose agent hasn't joined by now is treated as unavailable
+// (LiveKit full or the worker down) instead of "summoning" forever.
+const AGENT_JOIN_TIMEOUT_MS = 20_000;
 
 async function isMicAlreadyGranted(): Promise<boolean> {
   try {
@@ -439,7 +449,13 @@ function TranscriptDisplay() {
 
 // ─── Active session (inside LiveKitRoom context) ─────────────────────
 
-function ActiveVoiceSession({ onDisconnect }: { onDisconnect: () => void }) {
+function ActiveVoiceSession({
+  onDisconnect,
+  onAgentNoShow,
+}: {
+  onDisconnect: () => void;
+  onAgentNoShow: () => void;
+}) {
   const { state, audioTrack, agentAttributes } = useVoiceAssistant();
   const { microphoneTrack } = useLocalParticipant();
 
@@ -480,6 +496,12 @@ function ActiveVoiceSession({ onDisconnect }: { onDisconnect: () => void }) {
 
   const waitingForAgent =
     state === 'disconnected' || state === 'connecting' || state === undefined;
+
+  useEffect(() => {
+    if (!waitingForAgent) return;
+    const timer = setTimeout(onAgentNoShow, AGENT_JOIN_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [waitingForAgent, onAgentNoShow]);
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-black relative overflow-hidden font-mono">
@@ -779,6 +801,172 @@ function RestingView({ onRetry }: { onRetry?: () => void }) {
   );
 }
 
+function formatBackAt(reason: VoiceUnavailableReason, backAt?: string): string | null {
+  if (!backAt) return null;
+  const when = new Date(backAt);
+  if (Number.isNaN(when.getTime())) return null;
+  return reason === 'daily_limit'
+    ? when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : when.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+function unavailableCopy(
+  reason: VoiceUnavailableReason,
+  backAt?: string
+): { title: string; body: string; canRetry: boolean } {
+  const back = formatBackAt(reason, backAt);
+  switch (reason) {
+    case 'busy':
+      return {
+        title: 'Line is busy',
+        body:
+          'Too many people are talking to me right now (somehow). Give it a few minutes, or ask the terminal. Same brain, more typing.',
+        canRetry: true,
+      };
+    case 'monthly_limit':
+      return {
+        title: 'Out of minutes',
+        body: `I've blown through my voice limits for the month (also likely). AI me is back${
+          back ? ` around ${back}` : ' next month'
+        }. The terminal still works.`,
+        canRetry: false,
+      };
+    case 'daily_limit':
+      return {
+        title: 'Done talking for today',
+        body: `Voice hit its daily cap. Back${back ? ` at ${back}` : ' tomorrow'}. The terminal is still up.`,
+        canRetry: false,
+      };
+    case 'disabled':
+      return {
+        title: 'Voice is off',
+        body: "I've switched voice off for now. The terminal is still up.",
+        canRetry: false,
+      };
+    case 'no_show':
+      return {
+        title: "AI me didn't show up",
+        body:
+          'Either every line just filled up or something broke on my end. Try again in a minute, or use the terminal.',
+        canRetry: true,
+      };
+  }
+}
+
+function WaitlistForm({ reason }: { reason: VoiceUnavailableReason }) {
+  const [email, setEmail] = useState('');
+  const [phase, setPhase] = useState<'idle' | 'sending' | 'done' | 'invalid' | 'error'>('idle');
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (phase === 'sending' || phase === 'done') return;
+    setPhase('sending');
+    const result = await joinVoiceWaitlist(email.trim(), reason);
+    setPhase(result === 'ok' ? 'done' : result);
+    if (result === 'ok') trackEvent('voice_waitlist_join', { reason });
+  };
+
+  if (phase === 'done') {
+    return (
+      <p className="mt-6 text-[#8FA8C0] text-xs">
+        Got it. I&apos;ll email you once when AI me is back.
+      </p>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-6 flex flex-col items-center gap-2">
+      <p className="text-[#555555] text-[10px] tracking-[0.2em] uppercase">
+        Or get an email when I&apos;m back
+      </p>
+      <div className="flex w-full max-w-xs border border-[#1F1F1F] focus-within:border-[#3A4A5C]/60">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (phase === 'invalid' || phase === 'error') setPhase('idle');
+          }}
+          placeholder="you@somewhere.com"
+          aria-label="Email address"
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-xs text-white placeholder:text-[#444444] outline-none"
+        />
+        <button
+          type="submit"
+          disabled={phase === 'sending'}
+          className="px-4 text-[10px] uppercase tracking-widest text-[#8FA8C0] hover:text-white disabled:opacity-50 cursor-pointer"
+        >
+          {phase === 'sending' ? '...' : 'Notify me'}
+        </button>
+      </div>
+      <p className="text-[#444444] text-[10px] max-w-xs leading-relaxed">
+        {phase === 'invalid'
+          ? "That doesn't look like an email."
+          : phase === 'error'
+            ? "Couldn't save that. Try the terminal instead?"
+            : 'Used once to say it\'s back, maybe a hello later. No newsletter.'}
+      </p>
+    </form>
+  );
+}
+
+/**
+ * Voice is reachable but can't take a call: the 5-call cap, a daily or monthly
+ * limit, the owner's kill switch, or an agent that never joined. Same cold
+ * resting palette as RestingView, with the terminal as the first way out.
+ */
+function UnavailableView({
+  reason,
+  backAt,
+  onUseTerminal,
+  onRetry,
+}: {
+  reason: VoiceUnavailableReason;
+  backAt?: string;
+  onUseTerminal?: () => void;
+  onRetry: () => void;
+}) {
+  const copy = unavailableCopy(reason, backAt);
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-black relative overflow-hidden font-mono">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
+        <ParticleField
+          voiceState="resting"
+          readAgentAmplitude={IDLE_AMPLITUDE}
+          readUserAmplitude={IDLE_AMPLITUDE}
+        />
+      </div>
+
+      <div className="text-center z-10 px-6 max-w-md">
+        <p className="text-[#8FA8C0] text-sm tracking-[0.2em] uppercase mb-3">{copy.title}</p>
+        <p className="text-[#777777] text-xs leading-relaxed">{copy.body}</p>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          {onUseTerminal && (
+            <button
+              onClick={onUseTerminal}
+              className="group relative overflow-hidden border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-white hover:border-brand-red/50 transition-colors cursor-pointer"
+            >
+              <span className="text-brand-red">&gt;</span> Open the terminal
+            </button>
+          )}
+          {copy.canRetry && (
+            <button
+              onClick={onRetry}
+              className="border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-[#666666] hover:text-[#8FA8C0] hover:border-[#3A4A5C]/50 transition-colors cursor-pointer"
+            >
+              Try again
+            </button>
+          )}
+        </div>
+
+        <WaitlistForm reason={reason} />
+      </div>
+    </div>
+  );
+}
+
 function ErrorView({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-black font-mono text-center px-6">
@@ -803,10 +991,21 @@ type ConnectionState =
   | 'permission'
   | 'connecting'
   | 'connected'
+  | 'unavailable'
   | 'error';
 
-export default function VoiceResume() {
+export default function VoiceResume({ onUseTerminal }: { onUseTerminal?: () => void } = {}) {
   const [connState, setConnState] = useState<ConnectionState>('idle');
+  const [unavailable, setUnavailable] = useState<{
+    reason: VoiceUnavailableReason;
+    backAt?: string;
+  }>({ reason: 'busy' });
+
+  const showUnavailable = useCallback((reason: VoiceUnavailableReason, backAt?: string) => {
+    setUnavailable({ reason, backAt });
+    setConnState('unavailable');
+    trackEvent('voice_unavailable', { reason });
+  }, []);
   const [token, setToken] = useState('');
   const [wsUrl, setWsUrl] = useState('');
   const [error, setError] = useState('');
@@ -822,6 +1021,13 @@ export default function VoiceResume() {
 
     try {
       const res = await fetch(endpoint, { method: 'POST' });
+      if (res.status === 503) {
+        const data = await res.json().catch(() => null);
+        if (data?.reason && data.reason !== 'ok') {
+          showUnavailable(data.reason, data.back_at);
+          return;
+        }
+      }
       if (res.status === 429) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error ?? 'Rate limited — try again in a minute.');
@@ -852,7 +1058,7 @@ export default function VoiceResume() {
       }
       trackEvent('voice_error', { stage: 'token' });
     }
-  }, []);
+  }, [showUnavailable]);
 
   const handleDisconnect = useCallback(() => {
     if (sessionStartedAt.current) {
@@ -863,8 +1069,16 @@ export default function VoiceResume() {
     }
     setToken('');
     setWsUrl('');
-    setConnState('idle');
+    // Only a live session goes back to idle. LiveKitRoom also fires
+    // onDisconnected while unmounting for the unavailable view, and that must
+    // not overwrite it.
+    setConnState((s) => (s === 'connected' ? 'idle' : s));
   }, []);
+
+  const handleAgentNoShow = useCallback(() => {
+    sessionStartedAt.current = 0;
+    showUnavailable('no_show');
+  }, [showUnavailable]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -887,8 +1101,13 @@ export default function VoiceResume() {
     }
 
     setConnState('checking');
-    if (!(await isAgentReachable())) {
+    const status = await fetchVoiceStatus();
+    if (!status) {
       setConnState('resting');
+      return;
+    }
+    if (!status.available && status.reason !== 'ok') {
+      showUnavailable(status.reason, status.back_at);
       return;
     }
 
@@ -899,7 +1118,7 @@ export default function VoiceResume() {
     } else {
       setConnState('permission');
     }
-  }, [handlePermissionGranted]);
+  }, [handlePermissionGranted, showUnavailable]);
 
   switch (connState) {
     case 'idle':
@@ -922,6 +1141,15 @@ export default function VoiceResume() {
       );
     case 'connecting':
       return <ConnectingView />;
+    case 'unavailable':
+      return (
+        <UnavailableView
+          reason={unavailable.reason}
+          backAt={unavailable.backAt}
+          onUseTerminal={onUseTerminal}
+          onRetry={() => void handleStart()}
+        />
+      );
     case 'error':
       return <ErrorView message={error} onRetry={() => setConnState('idle')} />;
     case 'connected':
@@ -940,7 +1168,10 @@ export default function VoiceResume() {
           }}
           className="w-full h-full"
         >
-          <ActiveVoiceSession onDisconnect={handleDisconnect} />
+          <ActiveVoiceSession
+            onDisconnect={handleDisconnect}
+            onAgentNoShow={handleAgentNoShow}
+          />
           <RoomAudioRenderer />
         </LiveKitRoom>
       );

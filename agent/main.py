@@ -21,6 +21,7 @@ Usage:
 """
 
 import os
+import time
 import asyncio
 import threading
 import logging
@@ -42,6 +43,7 @@ from token_server import create_token_app
 from observability import setup_voice_tracing, attach_usage_reporter
 import llm_models
 import llm_voice
+import voice_availability
 
 load_dotenv(".env.local")
 
@@ -219,6 +221,15 @@ async def voice_agent(ctx: agents.JobContext):
     """Called when a new visitor connects to a LiveKit room."""
 
     logger.info(f"New session in room: {ctx.room.name}")
+
+    # Agent minutes for the monthly cap (LiveKit Build: 1,000/month). Probe
+    # rooms from tests/dispatch_probe.py count too: they use real minutes.
+    job_started = time.monotonic()
+
+    async def _record_minutes() -> None:
+        voice_availability.record_session_seconds(time.monotonic() - job_started)
+
+    ctx.add_shutdown_callback(_record_minutes)
 
     # ─── Observability ─────────────────────────────────────────
     # Bridge LiveKit's OTel spans (turns, llm prompts, tts/stt, EOU) into

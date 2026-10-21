@@ -127,7 +127,7 @@ export default function ExperienceSection() {
               transition={{ duration: 0.3 }}
               className="absolute inset-0 min-h-0"
             >
-              <VoiceResume />
+              <VoiceResume onUseTerminal={() => selectMode('chat')} />
             </motion.div>
           )}
         </AnimatePresence>

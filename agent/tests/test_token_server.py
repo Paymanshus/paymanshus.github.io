@@ -28,8 +28,19 @@ TEST_ENV = {
 
 
 @pytest.fixture(autouse=True)
-def reset_rate_limits(monkeypatch):
+def reset_rate_limits(monkeypatch, tmp_path):
     """Fresh rate-limit state and LiveKit env for every test."""
+    # Voice availability: no live rooms (never call LiveKit), fresh state dir.
+    import voice_availability
+
+    async def no_rooms():
+        return set()
+
+    monkeypatch.setattr(voice_availability, "_live_rooms", no_rooms)
+    monkeypatch.setenv("VOICE_STATE_DIR", str(tmp_path))
+    # These tests mint more tokens than the 5-call cap; the cap has its own tests.
+    monkeypatch.setenv("VOICE_MAX_CONCURRENT", "100")
+    voice_availability._reservations.clear()
     token_server._minute_hits.clear()
     token_server._day_hits.clear()
     token_server._global_day_hits.clear()

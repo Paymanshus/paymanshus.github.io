@@ -7,6 +7,9 @@ Endpoints:
     GET|POST /api/token   → {serverUrl, participantToken, room} (LiveKit room token)
     POST     /api/chat    → {reply} (Gemini answer grounded in resume BM25 context)
     GET      /api/health  → {status: "ok"}
+    GET      /api/voice/status → availability: 5-call cap, daily/monthly limits
+                                 (see voice_availability.py)
+    POST     /api/voice/notify → {email, reason}: "tell me when AI me is back"
     OPTIONS  *            → CORS preflight
 
 Security:
@@ -20,6 +23,7 @@ Security:
 import os
 import json
 import time
+import asyncio
 import uuid
 import hashlib
 import logging
@@ -36,6 +40,7 @@ import llm_context
 import llm_health
 import llm_ladder
 from prompts import TERMINAL_PERSONA_BODY
+import voice_availability
 
 logger = logging.getLogger("token-server")
 
@@ -74,6 +79,7 @@ RATE_LIMITS = {
     # endpoint: (per-ip per-minute, per-ip per-day, global per-day, global per-minute)
     "token": (6, 30, 300, 20),
     "chat": (10, 100, 3000, 60),
+    "notify": (3, 10, 2000, 30),
 }
 
 _minute_hits: dict[str, list[float]] = defaultdict(list)
@@ -144,7 +150,25 @@ async def handle_cors_preflight(request: web.Request) -> web.Response:
 
 # ─── /api/token ─────────────────────────────────────────────────────
 
+def _daily_token_cap_reached() -> bool:
+    now = time.time()
+    hits = [t for t in _global_day_hits["token"] if now - t < 86400]
+    return len(hits) >= RATE_LIMITS["token"][2]
+
+
+async def _voice_status() -> voice_availability.Status:
+    return await voice_availability.status(daily_cap_reached=_daily_token_cap_reached())
+
+
 async def generate_token(request: web.Request) -> web.Response:
+    # Availability first: a 6th caller must be turned away here, because past
+    # this point LiveKit's 5-session cap fails silently (the agent never joins).
+    st = await _voice_status()
+    if not st.available:
+        return web.json_response(
+            {"error": st.reason, **st.to_json()}, status=503, headers=_cors_headers(request)
+        )
+
     if err := _check_rate_limit(request, "token"):
         return web.json_response({"error": err}, status=429, headers=_cors_headers(request))
 
@@ -181,6 +205,7 @@ async def generate_token(request: web.Request) -> web.Response:
         )
     )
     jwt = token.to_jwt()
+    voice_availability.reserve(room_name)
 
     logger.info(
         "Token minted: room=%s participant=%s origin=%s",
@@ -365,6 +390,26 @@ async def chat(request: web.Request) -> web.Response:
     return web.json_response({"reply": reply}, headers=_cors_headers(request))
 
 
+# ─── /api/voice/status, /api/voice/notify ──────────────────────────
+
+async def voice_status(request: web.Request) -> web.Response:
+    st = await _voice_status()
+    return web.json_response(st.to_json(), headers=_cors_headers(request))
+
+
+async def voice_notify(request: web.Request) -> web.Response:
+    if err := _check_rate_limit(request, "notify"):
+        return web.json_response({"error": err}, status=429, headers=_cors_headers(request))
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid_json"}, status=400, headers=_cors_headers(request))
+    reason = str(body.get("reason") or "unknown")[:32]
+    if not voice_availability.add_to_waitlist(str(body.get("email") or ""), reason):
+        return web.json_response({"error": "invalid_email"}, status=400, headers=_cors_headers(request))
+    return web.json_response({"ok": True}, headers=_cors_headers(request))
+
+
 # ─── /api/health ────────────────────────────────────────────────────
 
 async def health_check(request: web.Request) -> web.Response:
@@ -389,10 +434,25 @@ async def _stop_canaries(app: web.Application) -> None:
     await llm_health.scheduler.stop()
 
 
+WAITLIST_TASK = web.AppKey("waitlist_task", asyncio.Task)
+
+
+async def _start_waitlist_notifier(app: web.Application) -> None:
+    app[WAITLIST_TASK] = asyncio.create_task(voice_availability.notify_loop())
+
+
+async def _stop_waitlist_notifier(app: web.Application) -> None:
+    task = app.get(WAITLIST_TASK)
+    if task:
+        task.cancel()
+
+
 def create_token_app() -> web.Application:
     app = web.Application()
     app.on_startup.append(_start_canaries)
     app.on_cleanup.append(_stop_canaries)
+    app.on_startup.append(_start_waitlist_notifier)
+    app.on_cleanup.append(_stop_waitlist_notifier)
     app.on_cleanup.append(_flush_observability)
     app.router.add_get("/api/token", generate_token)
     app.router.add_post("/api/token", generate_token)
@@ -400,7 +460,13 @@ def create_token_app() -> web.Application:
     app.router.add_post("/api/chat", chat)
     app.router.add_options("/api/chat", handle_cors_preflight)
     app.router.add_get("/api/health", health_check)
-    logger.info("Token server routes registered: /api/token, /api/chat, /api/health")
+    app.router.add_get("/api/voice/status", voice_status)
+    app.router.add_post("/api/voice/notify", voice_notify)
+    app.router.add_options("/api/voice/notify", handle_cors_preflight)
+    logger.info(
+        "Token server routes registered: /api/token, /api/chat, /api/health, "
+        "/api/voice/status, /api/voice/notify"
+    )
     return app
 
 
