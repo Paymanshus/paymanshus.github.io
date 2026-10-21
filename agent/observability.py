@@ -131,10 +131,11 @@ _PRICE_DEFAULTS = {
     "COST_LLM_INPUT_PER_1M": 0.30,
     "COST_LLM_OUTPUT_PER_1M": 1.20,
     "COST_STT_PER_MIN": 0.0077,  # deepgram nova-3 streaming
-    # Cartesia bills 1 credit per character for sonic-3, cloned voices included;
-    # $/credit depends on the plan, so set COST_TTS_PER_1K_CHARS to your plan's
-    # rate (plan price / monthly credits x 1000).
-    "COST_TTS_PER_1K_CHARS": 0.03,
+    # Cartesia sonic-3 with an instant-cloned voice: 1 credit per character.
+    # Pro plan ($5/mo) includes 100k credits, then pay-as-you-go overage at
+    # $65 per 1M credits (cartesia.ai/pricing, 2026-10-22). The overage rate is
+    # the marginal cost once included credits run out, so it's the default.
+    "COST_TTS_PER_1K_CHARS": 0.065,
 }
 
 

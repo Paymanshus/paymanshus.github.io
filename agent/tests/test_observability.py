@@ -78,8 +78,8 @@ async def test_estimate_costs_defaults():
     )
     assert costs["llm_usd"] == pytest.approx(0.30 + 1.20)
     assert costs["stt_usd"] == pytest.approx(0.0077)
-    assert costs["tts_usd"] == pytest.approx(0.03)
-    assert costs["total_usd"] == pytest.approx(1.5377)
+    assert costs["tts_usd"] == pytest.approx(0.065)
+    assert costs["total_usd"] == pytest.approx(1.5727)
 
 
 async def test_per_model_llm_cost_replaces_flat_rate():
