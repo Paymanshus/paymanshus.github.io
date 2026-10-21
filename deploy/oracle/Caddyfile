@@ -1,0 +1,7 @@
+# Caddy fetches and renews the Let's Encrypt certificate for this name on its
+# own (needs ports 80 and 443 open). The browser talks HTTPS to Caddy; Caddy
+# forwards to the agent's token/chat server inside the compose network.
+ps-agent.duckdns.org {
+	encode gzip
+	reverse_proxy agent:8080
+}

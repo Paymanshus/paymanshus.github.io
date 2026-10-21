@@ -315,7 +315,7 @@ This keeps rollback simple because the old history remains in the same repositor
 
 A standalone Python service in `agent/` that handles the real-time voice pipeline for the `/experience` voice mode. It runs separately from the Next.js app and communicates only through LiveKit's WebRTC infrastructure.
 
-**Hosting: Railway is up at `https://paymanshusgithubio-production.up.railway.app` but the worker was crash-looping on the multilingual turn-detector subprocess (see `readmes/deployment_options.md`). The static site is pointed at that URL via `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. Turn detection is off on Railway unless `VOICE_TURN_DETECTOR=true`. Do not enable Railway Serverless sleep.**
+**Hosting: Oracle Cloud Always Free ARM VM (1 OCPU / 6 GB, `ap-hyderabad-1`) behind Caddy at `https://ps-agent.duckdns.org`; runbook in `deploy/oracle/README.md`. The static site is pointed at that URL via `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. The turn detector runs there (it is only skipped by default when `RAILWAY_ENVIRONMENT` is set). Railway (`railway.toml`) is retired; its trial lapsed on 2026-10-13.**
 
 Note for any hosting work: the agent worker registers with LiveKit Cloud over an **outbound** WebSocket and needs no public inbound ports. Only the `token_server.py` HTTP endpoints (:8080) require a public URL.
 
@@ -605,7 +605,7 @@ The voice agent server (`agent/`) is the first backend service and is now scaffo
   lifetime deposit is what raises `:free` from 50 to 1,000 RPD. Also
   `tests/eval_context_modes.py` still needs a full run to pick the
   `LLM_CONTEXT_MODE` default from data rather than reasoning.
-- **Feature 07**: Deployment — Railway from GitHub (`railway.toml` + `agent/Dockerfile`, repo-root context). Public URL is `https://paymanshusgithubio-production.up.railway.app`. Pages gets it from `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. Worker must stay always-on (no Serverless). `VOICE_TURN_DETECTOR` defaults off on Railway so the EOU subprocess does not OOM.
+- **Feature 07**: Deployment — Oracle Always Free ARM VM running `deploy/oracle/compose.yaml` (agent built from `agent/Dockerfile` with repo-root context, plus Caddy for HTTPS). Public URL is `https://ps-agent.duckdns.org`. Pages gets it from `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. Worker must stay always-on. Previously on Railway (`railway.toml`), where `VOICE_TURN_DETECTOR` defaulted off so the EOU subprocess would not OOM.
 
 Integration rules going forward:
 

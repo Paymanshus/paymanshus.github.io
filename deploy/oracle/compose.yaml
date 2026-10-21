@@ -1,0 +1,42 @@
+# Voice/terminal agent on the Oracle Always Free ARM box (ps-agent.duckdns.org).
+# Run from the repo root on the server (see deploy/oracle/README.md):
+#   docker compose -f deploy/oracle/compose.yaml up -d --build
+name: ps-agent
+
+services:
+  agent:
+    build:
+      # Repo root, so agent/Dockerfile can COPY content/resumedump.md.
+      context: ../..
+      dockerfile: agent/Dockerfile
+    image: ps-agent:latest
+    # Secrets live only on the server (copied from agent/.env.local).
+    env_file: /opt/agent/agent.env
+    environment:
+      TOKEN_SERVER_PORT: "8080"
+      # 6 GB box: keep one job process warm so the first caller doesn't wait
+      # for a cold Python + ONNX import. The turn detector stays on (default
+      # off Railway).
+      AGENT_IDLE_PROCESSES: "1"
+    expose:
+      - "8080"
+    restart: unless-stopped
+    # Let in-flight voice calls drain on redeploy instead of cutting them off.
+    stop_grace_period: 60s
+
+  caddy:
+    image: caddy:2.10.2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - agent
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
