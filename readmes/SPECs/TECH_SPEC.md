@@ -315,7 +315,9 @@ This keeps rollback simple because the old history remains in the same repositor
 
 A standalone Python service in `agent/` that handles the real-time voice pipeline for the `/experience` voice mode. It runs separately from the Next.js app and communicates only through LiveKit's WebRTC infrastructure.
 
-**Hosting: Oracle Cloud Always Free ARM VM (1 OCPU / 6 GB, `ap-hyderabad-1`) behind Caddy at `https://ps-agent.duckdns.org`; runbook in `deploy/oracle/README.md`. The static site is pointed at that URL via `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. The turn detector runs there (it is only skipped by default when `RAILWAY_ENVIRONMENT` is set). Railway (`railway.toml`) is retired; its trial lapsed on 2026-10-13.**
+**Hosting: Oracle Cloud ARM VM (`ap-hyderabad-1`) behind Caddy at `https://ps-agent.duckdns.org`; runbook, account/budget details and the 2026-11-10 switch-back in `deploy/oracle/README.md`. Sized 4 OCPU / 24 GB on trial credit for the launch window, back to ≤ 2 OCPU / 12 GB (Always Free) by 2026-11-10.**
+**Voice is capped at 5 concurrent calls (LiveKit Cloud free plan) by `voice_availability.py`; see "Voice availability" below.**
+**Hosting history: The static site is pointed at that URL via `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. The turn detector runs there (it is only skipped by default when `RAILWAY_ENVIRONMENT` is set). Railway (`railway.toml`) is retired; its trial lapsed on 2026-10-13.**
 
 Note for any hosting work: the agent worker registers with LiveKit Cloud over an **outbound** WebSocket and needs no public inbound ports. Only the `token_server.py` HTTP endpoints (:8080) require a public URL.
 
@@ -326,10 +328,10 @@ Note for any hosting work: the agent worker registers with LiveKit Cloud over an
 | Runtime | Python 3.11 + asyncio | Isolated venv at `agent/.venv/` |
 | Agent framework | `livekit-agents` 1.5.1 | Worker + session lifecycle |
 | STT | Deepgram Nova-3 | Primary; Google Chirp as fallback via `USE_GOOGLE_STT=true` |
-| LLM | Multi-provider ladder (`llm_ladder.py`) — Gemini + OpenRouter, shared quota breaker | `VOICE_LADDER` env, default `gemini-3.1-flash-lite → openrouter(nemotron-nano:free → deepseek-v4-flash) → gemini-flash-lite-latest`. Voice is latency-ordered; the terminal ladder differs. Probe with `tests/probe_llm.py` |
-| TTS | Cartesia `sonic-3` → Deepgram Aura via `tts.FallbackAdapter` | Bare `sonic` was sunsetted by Cartesia (400). Model via `CARTESIA_MODEL`, voice via `CARTESIA_VOICE_ID`. Verified with `tests/probe_cartesia.sh` |
+| LLM | One benchmarked primary per surface, ladder as fallback (`llm_ladder.py`, `llm_voice.py`, `llm_health.py`) | Voice: `deepseek-v4.1-flash-1017 → claude-haiku-5.5 → gemini-3.1-flash-lite` (all OpenRouter, `reasoning: none`) `→ gemini-flash-lite-latest` (AI Studio). Terminal: Haiku 5.5 first. Voice hedges to rung 2 after 1.2 s without a token; 1-token canaries on token mint and every 10 min demote slow rungs; warm-up call at session start. Benchmarks: `readmes/perf/2026-10-21/`, `readmes/perf/2026-10-22/` (local). Override with `VOICE_LADDER` / `LLM_LADDER` |
+| TTS | Cartesia `sonic-3` → Deepgram Aura via `tts.FallbackAdapter` | Bare `sonic` was sunsetted by Cartesia (400). Model via `CARTESIA_MODEL`, voice via `CARTESIA_VOICE_ID` (instant-cloned voice). Verified with `tests/probe_cartesia.sh`. Plan: Cartesia Pro, 100k credits/month included, then $65 per 1M credits; sonic-3 is 1 credit per character, so ~$0.065 per 1k characters, which is the rate session cost estimates use. |
 | VAD | Silero (local) | `livekit-plugins-silero`; no API call, no cost |
-| Turn detection | LiveKit Multilingual Model (local default) | Skipped on Railway unless `VOICE_TURN_DETECTOR=true` — the EOU inference child is ~500MB and OOM-kills Trial/Free. Silero VAD endpointing is the fallback. |
+| Turn detection | LiveKit Multilingual Model (local default) | Imported at module level in `main.py` so `download-files` bakes the model into the image and the inference runner registers in the main process (a lazy in-job import crashed every voice job on 2026-10-21). Skipped on Railway unless `VOICE_TURN_DETECTOR=true`. Silero VAD endpointing is the fallback. |
 
 ### Directory structure
 
@@ -337,7 +339,10 @@ Note for any hosting work: the agent worker registers with LiveKit Cloud over an
 agent/
 ├── main.py                # Agent entrypoint — worker registration + session wiring
 │                          # + token server started in a daemon thread
-├── token_server.py        # HTTP server on :8080 — /api/token, /api/chat, /api/health
+├── token_server.py        # HTTP server on :8080 — /api/token, /api/chat, /api/health,
+│                          #   /api/voice/status, /api/voice/notify
+├── voice_availability.py  # 5-call cap, monthly minutes, kill switch, email waitlist
+├── llm_health.py          # 1-token canaries that demote slow LLM rungs
 ├── resume_context.py      # ContentIndex (BM25) + get_resume_index() singleton
 ├── requirements.txt       # Python dependencies (+ pytest-asyncio for tests)
 ├── .env.example           # Credential template (committed)
@@ -348,6 +353,8 @@ agent/
 │   ├── test_resume_context.py   # ContentIndex unit tests (55 tests incl. scored search)
 │   ├── test_token_server.py     # Token minting/CORS/rate-limit tests
 │   ├── test_llm_ladder.py       # Ladder walk, quota breaker, prompt layout
+│   ├── test_llm_primary.py      # Primary/hedge/canary/warm-up behaviour
+│   ├── test_voice_availability.py # Cap, limits, waitlist, status/notify endpoints
 │   ├── probe_cartesia.sh        # Cartesia TTS model availability probe
 │   ├── probe_llm.py             # Per-rung availability + TTFT + streaming probe
 │   ├── eval_context_modes.py    # Prompt-layout / caching comparison harness
@@ -387,6 +394,34 @@ Runs in a daemon thread inside the same process as the agent (port via
     OpenRouter provisioning key's monthly `limit`, which survives a restart.
     The token cap stays at 300/day because it bounds Cartesia and LiveKit, which
     are the genuinely expensive parts (~$0.10/session vs ~$0.003 of LLM).
+
+### Voice availability (`voice_availability.py`)
+
+LiveKit Cloud's free Build plan allows 5 concurrent agent sessions and 1,000
+agent minutes a month, and never refuses a 6th caller: the agent just doesn't
+join, and the page used to sit on "summoning the agent". Availability is now
+checked before a token is minted, and every reason is reported to the page.
+
+- `GET /api/voice/status` → `{available, reason, active, cap, retry_after_s?,
+  back_at?, minutes_used, minutes_cap}`. `/api/token` returns the same body with
+  `503` when refused.
+- Reasons: `busy` (live `voice-resume-*` rooms from LiveKit's room list, plus
+  tokens minted in the last 45 s, ≥ `VOICE_MAX_CONCURRENT`, default 5),
+  `monthly_limit` (agent minutes recorded by each voice job on shutdown ≥
+  `VOICE_MONTHLY_MINUTES`, default 950; resets on `VOICE_QUOTA_RESET_DAY`),
+  `daily_limit` (the 300/day global token cap), `disabled`
+  (`VOICE_DISABLED=true`). The browser adds `no_show`: token granted but no
+  agent after 20 s.
+- `POST /api/voice/notify {email, reason}` stores an email in
+  `VOICE_STATE_DIR/voice_waitlist.jsonl` (rate-limited, deduped). With `SMTP_*`
+  set, a background task emails pending entries once when voice is available
+  again.
+- State (`VOICE_STATE_DIR`) is a Docker volume on the VM, so minutes and the
+  waitlist survive rebuilds.
+- Frontend: `VoiceResume.tsx` checks `/api/voice/status` before asking for the
+  microphone and shows `UnavailableView` with per-reason copy, an "Open the
+  terminal" button (switches the resume tab to chat) and the optional email
+  box. GA events: `voice_unavailable`, `voice_waitlist_join`.
 
 ### LLM ladder (`llm_ladder.py`, `llm_models.py`, `llm_context.py`)
 
@@ -605,7 +640,8 @@ The voice agent server (`agent/`) is the first backend service and is now scaffo
   lifetime deposit is what raises `:free` from 50 to 1,000 RPD. Also
   `tests/eval_context_modes.py` still needs a full run to pick the
   `LLM_CONTEXT_MODE` default from data rather than reasoning.
-- **Feature 07**: Deployment — Oracle Always Free ARM VM running `deploy/oracle/compose.yaml` (agent built from `agent/Dockerfile` with repo-root context, plus Caddy for HTTPS). Public URL is `https://ps-agent.duckdns.org`. Pages gets it from `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. Worker must stay always-on. Previously on Railway (`railway.toml`), where `VOICE_TURN_DETECTOR` defaulted off so the EOU subprocess would not OOM.
+- **Feature 08**: Voice availability — ✅ 5-call cap, limits, unavailable screen and waitlist (2026-10-22). Open: configure `SMTP_*` for automatic "back" emails; LiveKit Cloud upgrade or self-hosting (`readmes/livekit_selfhost_option.md`, local) if 5 concurrent calls isn't enough.
+- **Feature 07**: Deployment — Oracle ARM VM running `deploy/oracle/compose.yaml` (agent built from `agent/Dockerfile` with repo-root context, plus Caddy for HTTPS). Public URL is `https://ps-agent.duckdns.org`. Pages gets it from `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. Worker must stay always-on. Previously on Railway (`railway.toml`), where `VOICE_TURN_DETECTOR` defaulted off so the EOU subprocess would not OOM.
 
 Integration rules going forward:
 
