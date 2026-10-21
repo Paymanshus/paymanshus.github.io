@@ -22,6 +22,7 @@ Usage:
 
 import os
 import time
+import random
 import asyncio
 import threading
 import logging
@@ -44,6 +45,14 @@ from observability import setup_voice_tracing, attach_usage_reporter
 import llm_models
 import llm_voice
 import voice_availability
+import voice_greeting
+from prompts import (
+    VOICE_PERSONA_INSTRUCTIONS,
+    VOICE_GREETINGS,
+    VOICE_GOODBYE_TIME_LIMIT,
+    VOICE_IDLE_CHECK,
+    VOICE_GOODBYE_IDLE,
+)
 
 load_dotenv(".env.local")
 
@@ -101,13 +110,18 @@ def _turn_handling() -> TurnHandlingOptions:
     endpointing = {
         "min_delay": float(os.environ.get("MIN_ENDPOINTING_DELAY", "0.4")),
     }
+    # A visitor who monologues (or leaves a TV on near the mic) gets a polite
+    # cut-in after ~45 s of speech instead of an ever-growing transcript; see
+    # PaymanshuAgent.on_user_turn_exceeded. LiveKit >= 1.8 only.
+    user_turn_limit = {"max_words": VOICE_MAX_TURN_WORDS}
     if MultilingualModel is None:
         logger.info("Turn detector off — Silero VAD endpointing only")
-        return TurnHandlingOptions(endpointing=endpointing)
+        return TurnHandlingOptions(endpointing=endpointing, user_turn_limit=user_turn_limit)
 
     return TurnHandlingOptions(
         turn_detection=MultilingualModel(),
         endpointing=endpointing,
+        user_turn_limit=user_turn_limit,
     )
 
 
@@ -127,22 +141,24 @@ VOICE_MAX_OUTPUT_TOKENS = int(os.environ.get("VOICE_MAX_OUTPUT_TOKENS", "140"))
 # tests/test_resume_context.py::TestScoredSearch.
 RESUME_SCORE_THRESHOLD = float(os.environ.get("RESUME_SCORE_THRESHOLD", "2.5"))
 
-RESUME_PERSONA_INSTRUCTIONS = """\
-You are Paymanshu Sharma on a live voice call, speaking in first person about
-your own experience. You are a Machine Learning Engineer at Maersk, Bangalore.
+# The persona lives in prompts.py, shared with the eval harnesses.
+RESUME_PERSONA_INSTRUCTIONS = VOICE_PERSONA_INSTRUCTIONS
 
-STYLE — these rules are absolute:
-- Answer in 1-2 short sentences, under 35 words total. Only go longer if the
-  caller explicitly asks for detail, and even then stay under 4 sentences.
-- Plain spoken language. No markdown, no emoji, no lists, no headings.
-- Warm, direct, conversational — like talking to a colleague, not presenting.
-
-CONTENT:
-- Resume context relevant to the caller's question is provided in the
-  conversation before each of your answers. Answer ONLY from that context.
-- If the context doesn't cover the question, say so honestly in one sentence.
-  Never invent facts about yourself.
-"""
+# ─── Session limits ────────────────────────────────────────────────
+# A voice call is a demo, not a phone line: every minute costs STT, LLM and TTS
+# and counts against LiveKit's monthly agent minutes. Hard cap per call, a
+# check-in when the visitor goes quiet, and caps on how much one user turn can
+# put in front of the LLM.
+VOICE_MAX_SESSION_S = float(os.environ.get("VOICE_MAX_SESSION_S", "300"))
+# LiveKit marks the user "away" after this long with nobody speaking; we ask
+# "Still there?" and hang up if there's still no answer VOICE_IDLE_GRACE_S later.
+VOICE_USER_AWAY_S = float(os.environ.get("VOICE_USER_AWAY_S", "30"))
+VOICE_IDLE_GRACE_S = float(os.environ.get("VOICE_IDLE_GRACE_S", "15"))
+# ~45 s of continuous speech. Past it LiveKit fires on_user_turn_exceeded.
+VOICE_MAX_TURN_WORDS = int(os.environ.get("VOICE_MAX_TURN_WORDS", "120"))
+# What one user turn may send to the LLM (and BM25) is capped too: see
+# llm_voice.trim_user_text (VOICE_MAX_USER_CHARS).
+trim_user_text = llm_voice.trim_user_text
 
 
 class PaymanshuAgent(Agent):
@@ -160,6 +176,11 @@ class PaymanshuAgent(Agent):
         self, turn_ctx: ChatContext, new_message: ChatMessage
     ) -> None:
         query = new_message.text_content or ""
+        trimmed = trim_user_text(query)
+        if trimmed != query:
+            logger.info("long user turn trimmed: %d -> %d chars", len(query), len(trimmed))
+            new_message.content = [trimmed]
+            query = trimmed
         index = get_resume_index()
         context, score = index.search_scored(query, top_k=2)
 
@@ -180,6 +201,21 @@ class PaymanshuAgent(Agent):
         turn_ctx.add_message(
             role="assistant",
             content=f"[Context for the next answer — internal, not spoken]\n{context}",
+        )
+
+    async def on_user_turn_exceeded(self, ev) -> None:
+        """The caller has talked for ~45 s straight: cut in briefly, replying to
+        the tail of what they said instead of the whole transcript."""
+        logger.info("user turn limit hit: %s words", getattr(ev, "accumulated_word_count", "?"))
+        await self.session.generate_reply(
+            user_input=trim_user_text(getattr(ev, "transcript", "") or ""),
+            instructions=(
+                "The caller has been talking for a while without a pause. Cut in "
+                "politely in one short sentence: respond to the gist, or ask them "
+                "to put the question in a sentence or two."
+            ),
+            allow_interruptions=False,
+            tool_choice="none",
         )
 
 
@@ -334,6 +370,9 @@ async def voice_agent(ctx: agents.JobContext):
         # Start LLM+TTS on the interim transcript while endpointing is still
         # confirming end-of-turn — hides most LLM TTFT inside the wait.
         preemptive_generation=True,
+        # Fires user_state_changed -> "away" after this long with nobody
+        # speaking; drives the idle check-in and hang-up below.
+        user_away_timeout=VOICE_USER_AWAY_S,
     )
 
     # Per-session STT/LLM/TTS usage totals + estimated cost, logged at
@@ -368,13 +407,80 @@ async def voice_agent(ctx: agents.JobContext):
 
     _publish_attrs({"voice.tts": "ok", "voice.llm": "ok"})
 
-    try:
-        await session.generate_reply(
-            instructions="Greet the caller in one short sentence as Paymanshu and ask what they'd like to know."
+    # Fixed lines (greeting, goodbyes) play from pre-rendered audio: no LLM
+    # call, no TTS credits after the first render, and no wait. voice_greeting
+    # falls back to live TTS if the cache can't be used.
+    tts_model_name = os.environ.get("CARTESIA_MODEL", "sonic-3")
+    tts_voice_id = os.environ.get("CARTESIA_VOICE_ID", "79a125e8-cd45-4c13-8a67-188112f4dd22")
+
+    def say_line(text: str, *, allow_interruptions: bool = True):
+        return voice_greeting.say_cached(
+            session, text, tts=cartesia_tts, model=tts_model_name, voice=tts_voice_id,
+            allow_interruptions=allow_interruptions,
         )
-    except Exception as e:
-        logger.warning(f"generate_reply failed: {e}")
-        await session.say("Hey! I'm Paymanshu. Ask me anything about my experience.")
+
+    await say_line(random.choice(VOICE_GREETINGS))
+
+    # ─── Session limits: hard cap and idle hang-up ─────────────
+    ending = asyncio.Event()
+
+    async def end_call(text: str, reason: str) -> None:
+        """Say goodbye (not interruptible), tell the page why, then close the
+        room so the visitor's client disconnects cleanly."""
+        if ending.is_set():
+            return
+        ending.set()
+        logger.info("ending voice session room=%s reason=%s", ctx.room.name, reason)
+        try:
+            session.interrupt()
+        except Exception:
+            pass
+        try:
+            await ctx.room.local_participant.set_attributes({"voice.end_reason": reason})
+        except Exception as e:
+            logger.warning("failed to set end reason: %s", e)
+        try:
+            handle = await say_line(text, allow_interruptions=False)
+            await asyncio.wait_for(handle.wait_for_playout(), timeout=15)
+        except Exception as e:
+            logger.warning("goodbye playback failed: %s", e)
+        await asyncio.sleep(0.5)
+        try:
+            await ctx.delete_room()
+        except Exception as e:
+            logger.warning("delete_room failed (%s), shutting down the job", e)
+            ctx.shutdown(reason=reason)
+
+    async def _time_limit() -> None:
+        await asyncio.sleep(VOICE_MAX_SESSION_S)
+        await end_call(VOICE_GOODBYE_TIME_LIMIT, "time_limit")
+
+    idle_task: asyncio.Task | None = None
+
+    async def _idle_check() -> None:
+        handle = await say_line(VOICE_IDLE_CHECK)
+        await handle.wait_for_playout()
+        await asyncio.sleep(VOICE_IDLE_GRACE_S)
+        await end_call(VOICE_GOODBYE_IDLE, "idle")
+
+    @session.on("user_state_changed")
+    def _on_user_state(ev) -> None:
+        nonlocal idle_task
+        if ev.new_state == "away" and not ending.is_set():
+            if idle_task is None or idle_task.done():
+                idle_task = asyncio.create_task(_idle_check())
+        elif (ev.new_state == "speaking" and not ending.is_set()
+              and idle_task is not None and not idle_task.done()):
+            idle_task.cancel()  # they're back: no hang-up
+
+    limit_task = asyncio.create_task(_time_limit())
+
+    async def _cancel_limits() -> None:
+        for task in (limit_task, idle_task):
+            if task is not None and not task.done():
+                task.cancel()
+
+    ctx.add_shutdown_callback(_cancel_limits)
 
     logger.info("Agent session started successfully")
 

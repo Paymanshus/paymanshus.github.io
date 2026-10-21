@@ -482,9 +482,18 @@ function ActiveVoiceSession({
     llmStatus === 'fallback' || ttsStatus === 'degraded';
   const fallbackTitle =
     ttsStatus === 'degraded' ? 'fallback voice' : 'fallback model';
+  // Set by the agent just before it says goodbye and closes the room
+  // (agent/main.py session limits), so the reason stays readable on screen.
+  const endReason = agentAttributes?.['voice.end_reason'];
+  const endMessage =
+    endReason === 'time_limit'
+      ? 'demo calls are capped at 5 minutes. ending the call'
+      : endReason === 'idle'
+        ? 'no one there, so ending the call'
+        : null;
   const degradedMessage = ttsDown
     ? 'voice output unavailable — provider limits hit. try the chat tab'
-    : null;
+    : endMessage;
 
   const agentMediaTrack = (audioTrack as TrackReference | undefined)?.publication
     ?.track?.mediaStreamTrack;

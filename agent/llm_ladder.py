@@ -446,6 +446,7 @@ async def _call_gemini(
     max_tokens: int,
     temperature: float,
     stream: bool,
+    on_delta=None,
 ) -> LLMResult:
     system_instruction, contents = llm_context.to_gemini_contents(ctx)
     config = _gemini_config(entry.model, system_instruction, max_tokens, temperature)
@@ -469,6 +470,8 @@ async def _call_gemini(
                         ttft = (time.perf_counter() - started) * 1000
                     chunk_count += 1
                     text_parts.append(chunk.text)
+                    if on_delta is not None:
+                        on_delta(chunk.text)
                 if getattr(chunk, "usage_metadata", None):
                     usage = chunk.usage_metadata
             return "".join(text_parts), usage
@@ -578,6 +581,7 @@ async def _call_openrouter(
     stream: bool,
     session_id: str | None,
     session: aiohttp.ClientSession | None = None,
+    on_delta=None,
 ) -> LLMResult:
     api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if not api_key:
@@ -648,6 +652,8 @@ async def _call_openrouter(
                                 ttft = (time.perf_counter() - started) * 1000
                             chunk_count += 1
                             text_parts.append(piece)
+                            if on_delta is not None:
+                                on_delta(piece)
                 text = "".join(text_parts)
                 usage = _usage_from_openrouter(usage_raw)
     except asyncio.TimeoutError:
@@ -685,12 +691,18 @@ async def call_entry(
     stream: bool = False,
     session_id: str | None = None,
     session: aiohttp.ClientSession | None = None,
+    on_delta=None,
 ) -> LLMResult:
     """Call one ladder entry. Raises LLMError; does not touch the breaker.
 
     Exposed separately so probes and the eval harness can exercise a single entry
-    without ladder semantics.
+    without ladder semantics. `on_delta(text)` is called for every streamed text
+    piece (and implies stream=True), for callers that relay tokens as they come.
     """
+    extra = {}
+    if on_delta is not None:
+        stream = True
+        extra["on_delta"] = on_delta
     # Precedence: explicit argument → the rung's own `~ms` override → the
     # surface default. Rungs vary by an order of magnitude in latency, so a
     # single shared timeout would either strangle the slow ones or let a hung
@@ -703,7 +715,7 @@ async def call_entry(
         return await _call_gemini(
             entry, ctx,
             timeout_ms=timeout_ms, max_tokens=max_tokens,
-            temperature=temperature, stream=stream,
+            temperature=temperature, stream=stream, **extra,
         )
     if entry.provider == "openrouter":
         if not openrouter_enabled():
@@ -712,7 +724,7 @@ async def call_entry(
             entry, ctx,
             surface=surface, timeout_ms=timeout_ms, max_tokens=max_tokens,
             temperature=temperature, stream=stream, session_id=session_id,
-            session=session,
+            session=session, **extra,
         )
     raise LLMError(KIND_OTHER, f"unknown provider {entry.provider!r}")
 
@@ -795,6 +807,7 @@ async def generate(
     session_id: str | None = None,
     stream: bool = False,
     on_attempt=None,
+    on_delta=None,
 ) -> LLMResult | None:
     """Walk the ladder top to bottom; return the first success, else None.
 
@@ -805,9 +818,22 @@ async def generate(
     `on_attempt(entry, result_or_error)` is called once per attempted entry, so
     callers can record a Langfuse generation per attempt without this module
     depending on Langfuse.
+
+    `on_delta(text)` streams text as it arrives. Falling through to the next
+    rung is only possible before any text has been relayed: once a rung has
+    streamed part of a reply, a failure ends the walk (returns None) rather
+    than appending a second, different answer to the half-sent first one.
     """
     ladder = ladder if ladder is not None else llm_models.LLM_LADDER
     attempts: list[str] = []
+    relayed = False
+
+    def _relay(text: str) -> None:
+        nonlocal relayed
+        relayed = True
+        on_delta(text)
+
+    extra = {"on_delta": _relay} if on_delta is not None else {}
 
     for entry in ladder:
         # "Not configured" is not "failed". Without this an unset
@@ -831,13 +857,17 @@ async def generate(
             result = await call_entry(
                 entry, ctx,
                 surface=surface, max_tokens=max_tokens, temperature=temperature,
-                stream=stream, session_id=session_id,
+                stream=stream, session_id=session_id, **extra,
             )
         except LLMError as err:
             breaker.record_failure(entry, err)
             attempts.append(f"{entry.label}={err.kind}")
             if on_attempt:
                 on_attempt(entry, err)
+            if relayed:
+                logger.error("ladder: %s failed mid-stream, not falling through: %s",
+                             entry.label, err.message[:160])
+                return None
             continue
 
         result.attempts = attempts + [f"{entry.label}=ok"]

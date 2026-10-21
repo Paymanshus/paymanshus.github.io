@@ -187,6 +187,27 @@ def _build_one(entry: llm_models.LadderEntry, *, max_output_tokens: int, tempera
     raise ValueError(f"unknown provider {entry.provider!r}")
 
 
+# What one user turn may send to the LLM (and BM25): the last N characters.
+# ~600 chars is ~100 spoken words; the end of a long ramble is where the
+# question usually is, and a cap here keeps one runaway transcript (a TV near
+# the mic, a visitor reading a JD aloud) from becoming a huge prompt.
+VOICE_MAX_USER_CHARS = int(os.environ.get("VOICE_MAX_USER_CHARS", "600"))
+
+
+def trim_user_text(text: str, limit: int | None = None) -> str:
+    """Keep the last `limit` characters of a long transcript, cut at a word
+    boundary and marked, so the LLM knows it's hearing the tail end."""
+    limit = VOICE_MAX_USER_CHARS if limit is None else limit
+    text = (text or "").strip()
+    if limit <= 0 or len(text) <= limit:
+        return text
+    tail = text[-limit:]
+    space = tail.find(" ")
+    if 0 <= space < 40:
+        tail = tail[space + 1:]
+    return "(earlier part trimmed) ..." + tail
+
+
 _END = object()
 
 

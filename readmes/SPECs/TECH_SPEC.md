@@ -326,7 +326,7 @@ Note for any hosting work: the agent worker registers with LiveKit Cloud over an
 | Runtime | Python 3.11 + asyncio | Isolated venv at `agent/.venv/` |
 | Agent framework | `livekit-agents` 1.5.1 | Worker + session lifecycle |
 | STT | Deepgram Nova-3 | Primary; Google Chirp as fallback via `USE_GOOGLE_STT=true` |
-| LLM | Multi-provider ladder (`llm_ladder.py`) — Gemini + OpenRouter, shared quota breaker | `VOICE_LADDER` env, default `gemini-3.1-flash-lite → openrouter(nemotron-nano:free → deepseek-v4-flash) → gemini-flash-lite-latest`. Voice is latency-ordered; the terminal ladder differs. Probe with `tests/probe_llm.py` |
+| LLM | Multi-provider ladder (`llm_ladder.py`) — OpenRouter first, Gemini direct last, shared quota breaker | Voice: `deepseek-v4.1-flash-1017 → claude-haiku-5.5 → gemini-3.1-flash-lite (OpenRouter) → gemini-flash-lite-latest (AI Studio)`, rungs 1+2 hedged after 1.2 s. Terminal: Haiku 5.5 first. Reasoning off on OpenRouter calls. Canary health checks (`llm_health.py`). Measurements: `readmes/perf/2026-10-22/` (local) |
 | TTS | Cartesia `sonic-3` → Deepgram Aura via `tts.FallbackAdapter` | Bare `sonic` was sunsetted by Cartesia (400). Model via `CARTESIA_MODEL`, voice via `CARTESIA_VOICE_ID`. Verified with `tests/probe_cartesia.sh` |
 | VAD | Silero (local) | `livekit-plugins-silero`; no API call, no cost |
 | Turn detection | LiveKit Multilingual Model (local default) | Skipped on Railway unless `VOICE_TURN_DETECTOR=true` — the EOU inference child is ~500MB and OOM-kills Trial/Free. Silero VAD endpointing is the fallback. |
@@ -337,7 +337,11 @@ Note for any hosting work: the agent worker registers with LiveKit Cloud over an
 agent/
 ├── main.py                # Agent entrypoint — worker registration + session wiring
 │                          # + token server started in a daemon thread
-├── token_server.py        # HTTP server on :8080 — /api/token, /api/chat, /api/health
+├── token_server.py        # HTTP server on :8080 — /api/token, /api/chat(/stream), /api/health
+├── prompts.py             # Persona (shared core + terminal/voice registers), fixed voice lines
+├── voice_greeting.py      # Render-once, cache-on-disk audio for fixed voice lines
+├── llm_voice.py           # Voice LLM: breaker guard, hedging, warm-up, prompt-size caps
+├── llm_health.py          # Canary health checks shared with voice sessions
 ├── resume_context.py      # ContentIndex (BM25) + get_resume_index() singleton
 ├── requirements.txt       # Python dependencies (+ pytest-asyncio for tests)
 ├── .env.example           # Credential template (committed)
@@ -375,6 +379,13 @@ Runs in a daemon thread inside the same process as the agent (port via
   tells the frontend to use its keyword fallback. Request/response shapes are
   unchanged from the original Gemini-only implementation, so the frontend needed
   no change.
+- `POST /api/chat/stream` — same request and validation, answered as
+  Server-Sent Events: `data: {"delta": "..."}` per piece, then `{"done": true}`
+  or `{"error": "llm_unavailable"}`. SSE over fetch, not a websocket: one-way
+  tokens, no connection management, and Caddy passes `text/event-stream`
+  through. The ladder only falls through to the next model before any text has
+  been sent. `ChatResume.tsx` (`lib/chatStream.ts`) streams first and falls back
+  to `/api/chat`, then to the offline keyword answers.
 - CORS restricted to `paymanshus.github.io` + localhost dev origins.
 - In-memory rate limits (per-IP/minute, per-IP/day, global/day, **global/minute**):
   token `6/30/300/20`, chat `10/100/3000/60`. 429 responses carry a
@@ -461,7 +472,21 @@ Browser ←—WebRTC—→ LiveKit Cloud SFU ←—WebRTC—→ agent/main.py
   listening indicator for LLM fallback / TTS degraded; TTS `down` still gets
   the amber banner. OpenRouter 401s lock as `KIND_CREDITS` (24h) rather than a
   20s `server_error` retry loop. Gemini deadline-too-short 400s are not locked.
-- Greeting via `session.generate_reply()` with `session.say()` fallback
+- **Persona**: `prompts.py` holds one shared core voice plus a texting register
+  (terminal) and a spoken register (voice), with short in-voice examples.
+- **Fixed lines from cached audio** (`voice_greeting.py`): the greeting (random
+  from `prompts.VOICE_GREETINGS`) and the goodbye/idle lines are synthesized once
+  with Cartesia, cached as WAV under `VOICE_AUDIO_CACHE_DIR` (the state volume on
+  the VM), and played with `session.say(audio=...)`: no LLM call and no TTS
+  credits after the first render. Falls back to live TTS on any cache error.
+- **Session limits**: hard cap `VOICE_MAX_SESSION_S` (300 s) and an idle
+  hang-up (user "away" after `VOICE_USER_AWAY_S`, then "Still there?", then
+  goodbye after `VOICE_IDLE_GRACE_S`). Before closing the room the agent sets
+  participant attribute `voice.end_reason` (`time_limit` / `idle`), which
+  `VoiceResume.tsx` shows. Long user turns: LiveKit `user_turn_limit`
+  (`VOICE_MAX_TURN_WORDS`, ~45 s of speech) cuts in politely, and each turn sends
+  at most the last `VOICE_MAX_USER_CHARS` (600) characters to the LLM; the voice
+  context is capped at `VOICE_MAX_CONTEXT_ITEMS` (40).
 - **Prewarm** (`server.setup_fnc`): builds the resume BM25 index and imports
   `httpcore` + `livekit.plugins.openai` so those ~1s first-use imports do not
   block the session event loop. Silero still loads in the session.

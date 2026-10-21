@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { trackEvent } from '@/lib/analytics';
 import { agentEndpoint, isAgentConfigured } from '@/lib/agent';
+import { readChatStream } from '@/lib/chatStream';
 
 const BOOT_SEQUENCE = [
   "INITIALIZING SYSTEM...",
@@ -191,37 +192,84 @@ export default function ChatResume() {
       setHistory(prev => [...prev, ...keywordFallback(question), " "]);
       return;
     }
+    const streamEndpoint = `${endpoint}/stream`;
+
+    const body = JSON.stringify({
+      message: question,
+      history: chatHistoryRef.current.slice(-6),
+    });
+    const finish = (reply: string) => {
+      chatHistoryRef.current.push({ role: 'user', text: question });
+      chatHistoryRef.current.push({ role: 'system', text: reply });
+      trackEvent('terminal_chat', { llm: true });
+    };
 
     setIsThinking(true);
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: question,
-          history: chatHistoryRef.current.slice(-6),
-        }),
+    // Streamed reply: text appears as the model writes it. `replyStart` is the
+    // history index where this reply's lines begin, fixed on the first piece.
+    let replyStart: number | null = null;
+    let streamed = '';
+    // The agent answered but no model could: retrying /api/chat would just
+    // walk the same failing ladder again, so go straight to the local fallback.
+    let llmUnavailable = false;
+    const renderStreamed = () =>
+      setHistory(prev => {
+        if (replyStart === null) replyStart = prev.length;
+        return [...prev.slice(0, replyStart), ...escapeHtml(streamed).split('\n')];
       });
 
+    try {
+      const res = await fetch(streamEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
       if (res.status === 429) {
         const data = await res.json().catch(() => ({ error: 'Rate limited.' }));
         setHistory(prev => [...prev, `[RATE LIMITED] ${data.error}`, " "]);
         return;
       }
-      if (!res.ok) throw new Error(`backend ${res.status}`);
+      if (!res.ok) throw new Error(`stream ${res.status}`);
 
-      const data = await res.json();
-      const reply: string = data.reply || '';
-      if (!reply) throw new Error('empty reply');
-
-      chatHistoryRef.current.push({ role: 'user', text: question });
-      chatHistoryRef.current.push({ role: 'system', text: reply });
-      setHistory(prev => [...prev, ...escapeHtml(reply).split('\n'), " "]);
-      trackEvent('terminal_chat', { llm: true });
+      await readChatStream(res, (ev) => {
+        if ('delta' in ev) {
+          setIsThinking(false);
+          streamed += ev.delta;
+          renderStreamed();
+        } else if ('error' in ev) {
+          llmUnavailable = true;
+        }
+      });
+      if (!streamed.trim()) throw new Error('empty reply');
+      setHistory(prev => [...prev, " "]);
+      finish(streamed);
     } catch {
-      setHistory(prev => [...prev, ...keywordFallback(question), " "]);
-      // Offline keyword fallback — worth knowing how often the backend misses.
-      trackEvent('terminal_chat', { llm: false });
+      if (streamed.trim()) {
+        // Connection dropped mid-reply: keep what arrived.
+        setHistory(prev => [...prev, " "]);
+        finish(streamed);
+      } else {
+        // Stream unavailable (older agent, proxy trouble): one plain request,
+        // then the offline keyword fallback.
+        try {
+          if (llmUnavailable) throw new Error('llm_unavailable');
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+          });
+          if (!res.ok) throw new Error(`backend ${res.status}`);
+          const data = await res.json();
+          const reply: string = data.reply || '';
+          if (!reply) throw new Error('empty reply');
+          setHistory(prev => [...prev, ...escapeHtml(reply).split('\n'), " "]);
+          finish(reply);
+        } catch {
+          setHistory(prev => [...prev, ...keywordFallback(question), " "]);
+          // Offline keyword fallback — worth knowing how often the backend misses.
+          trackEvent('terminal_chat', { llm: false });
+        }
+      }
     } finally {
       setIsThinking(false);
     }
