@@ -172,42 +172,56 @@ def _env_str_list(name: str, default: list[str]) -> tuple[str, ...]:
 
 
 # ─── The ladders ───────────────────────────────────────────────────
-# MEASURED TTFT, 2026-07-26, streaming, median of 3, thinking disabled:
-#     gemini-3.1-flash-lite      607 ms
-#     gemini-flash-lite-latest   661 ms
-#     gemini-3.5-flash          6321 ms   (range 2485-7014)
-#     gemini-flash-latest      83787 ms   ← unusable, excluded everywhere
+# MEASURED TTFT, 2026-10-21, from the Oracle VM (ap-hyderabad-1), streaming,
+# real resume prompt (~2.9k input tokens), two rounds. Raw logs and notes:
+# readmes/perf/2026-10-21/ (local) and /opt/agent/perf/ on the VM.
+#   Gemini direct (AI Studio free tier):
+#     gemini-flash-lite-latest    1015 /  885 ms
+#     gemini-3.5-flash-lite       1299 /  904 ms
+#     gemini-2.5-flash-lite       1395 / 1156 ms   (implicit cache hit on round 2)
+#     gemini-3.1-flash-lite       2238 / 1365 ms
+#     gemini-2.5-flash            1810 / 1303 ms
+#     gemini-3-flash-preview      3954 / 2107 ms
+#     gemini-3.5-flash           TIMEOUT(30s) / 3090 ms   ← flaky
+#     gemini-3.6-flash            9409 / 5583 ms
+#     gemini-3.7/3.8-flash, gemma-4-*   timeouts / 500s
+#   OpenRouter (paid, voice prefs):
+#     google/gemini-2.5-flash-lite   915 ms   ~$0.0003/call
+#     google/gemini-3.1-flash-lite   964 ms
+#     deepseek/deepseek-v4.1-flash  1002 ms (terminal prefs: 1335 / 1812 ms)
+#     nvidia/nemotron-3-nano-30b-a3b 1047 ms
+#     every `:free` slug tried: provider errors / 429 / no endpoints
+# Earlier the same day (13:30 IST) AI Studio took 16-30s for a 5-token reply
+# from both the VM and a home connection, so Gemini direct can degrade for
+# hours: every ladder keeps a non-AI-Studio rung second.
 #
-# Gemini generation note: gemini-2.5-flash and -2.5-flash-lite 404 (sunsetted
-# mid-2026), so 3.x is the live generation. `gemini-flash-lite-latest` is the
-# rolling alias that survives sunsets, which is why each ladder ends on it.
-# `gemini-flash-latest` is NOT used: it resolves to something that took 84
-# seconds to answer "say hi in four words".
+# 2.5-flash / 2.5-flash-lite are served again (they 404'd mid-2026), but are
+# not relied on as primaries in case that was a temporary reprieve.
+# `gemini-flash-lite-latest` is the rolling alias that survives sunsets, which
+# is why each ladder ends on it. `gemini-flash-latest` is NOT used: it once took
+# 84 seconds to answer "say hi in four words".
 
-# Terminal chat: quality first, latency second — a recruiter reading a written
-# answer will wait, and 3.5-flash is the better model. That is a deliberate
-# ~6s TTFT trade (see the table above); flip the first two entries if it starts
-# feeling slow. DeepSeek V4 Flash is the spike absorber, with free-tier siblings
-# ahead of it inside the same request via models[].
-# `~15000` on the first rung: at ~6.3s to first token it needs roughly double
-# the surface default to finish 200 tokens. Without the override it timed out on
-# every single request and silently never answered, which would have quietly
-# undone the whole point of putting it first.
+# Terminal chat: quality first — a recruiter reading a written answer will wait,
+# and 3.5-flash is the better model. But it timed out once in two probes, so its
+# timeout is tightened to ~12s (it answered in ~3.1s when healthy, ~6.3s in July) and a fast
+# paid rung follows. DeepSeek V4.1 Flash passes the terminal quantization
+# allow-list; Google models on OpenRouter do NOT (they report no quantization),
+# which is why they only appear on the voice ladder.
 LLM_LADDER = _env_ladder("LLM_LADDER", [
-    "gemini:gemini-3.5-flash~15000",
-    "openrouter:nvidia/nemotron-3-super-120b-a12b:free|deepseek/deepseek-v4-flash",
-    "gemini:gemini-3.1-flash-lite",
+    "gemini:gemini-3.5-flash~12000",
+    "openrouter:deepseek/deepseek-v4.1-flash",
+    "gemini:gemini-3.5-flash-lite",
     "gemini:gemini-flash-lite-latest",
 ])
 
-# Voice: latency first, and it is not close — 3.5-flash's ~6s TTFT would be dead
-# air mid-conversation, so flash-lite leads here even though it leads the terminal
-# ladder only as a fallback. Spoken answers are capped at ~35 words, so the
-# smaller model costs little. Nemotron Nano is the smallest free option; the probe
-# confirms whether it actually wins on TTFT.
+# Voice: latency first. 3.5-flash-lite is the fastest pinned Gemini model in the
+# 2026-10-21 probe. The second rung goes through OpenRouter so an AI Studio
+# slowdown doesn't take voice down with it; models[] falls through to DeepSeek
+# inside the same request. Spoken answers are capped at ~35 words, so the paid
+# rung costs fractions of a cent per turn.
 VOICE_LADDER = _env_ladder("VOICE_LADDER", [
-    "gemini:gemini-3.1-flash-lite",
-    "openrouter:nvidia/nemotron-3-nano-30b-a3b:free|deepseek/deepseek-v4-flash",
+    "gemini:gemini-3.5-flash-lite",
+    "openrouter:google/gemini-2.5-flash-lite|deepseek/deepseek-v4.1-flash",
     "gemini:gemini-flash-lite-latest",
 ])
 

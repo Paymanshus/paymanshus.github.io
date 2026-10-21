@@ -319,6 +319,27 @@ async def voice_agent(ctx: agents.JobContext):
     # session end and (when enabled) recorded in Langfuse.
     attach_usage_reporter(session, ctx, ctx.room.name)
 
+    # One `turn-latency` line per conversation item, from LiveKit's own
+    # per-turn MetricsReport (seconds). User items carry the STT/endpointing
+    # delays; assistant items carry LLM TTFT, TTS TTFB and end-to-end latency.
+    # grep the container logs for `turn-latency` to profile a real call.
+    @session.on("conversation_item_added")
+    def _log_turn_latency(event) -> None:
+        item = getattr(event, "item", None)
+        metrics = getattr(item, "metrics", None) or {}
+        if not metrics:
+            return
+        fields = " ".join(
+            f"{k}={v:.3f}"
+            for k, v in metrics.items()
+            # *_at keys are wall-clock timestamps, not durations.
+            if isinstance(v, (int, float)) and not k.endswith("_at")
+        )
+        logger.info(
+            "turn-latency room=%s role=%s %s",
+            ctx.room.name, getattr(item, "role", "?"), fields,
+        )
+
     await session.start(
         room=ctx.room,
         agent=PaymanshuAgent(),
