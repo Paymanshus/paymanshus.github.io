@@ -41,6 +41,7 @@ deployed/
 #   readmes/SPECs/*          TECH_SPEC, DESIGN_SPEC, BLOG_VISUALS
 #   readmes/SEOPLAN.md       remaining owner SEO/analytics tasks
 #   readmes/DEPLOY_VOICE_AGENT.md
+#   readmes/WORKING_ON.md, readmes/optimizations.md
 #   docs/SEO_SETUP.md
 #   README.md, agent/RUN.md, AGENTS.md
 #
@@ -54,6 +55,7 @@ readmes/*
 !readmes/SEOPLAN.md
 !readmes/DEPLOY_VOICE_AGENT.md
 !readmes/WORKING_ON.md
+!readmes/optimizations.md
 docs/voice-feature/
 left.md
 promptlatest.md
