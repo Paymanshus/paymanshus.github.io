@@ -1,0 +1,63 @@
+name: Deploy voice agent
+
+# Tests, then deploys the agent to the Oracle VM. Runs on pushes to main that
+# touch the agent, and on demand (Actions tab -> Deploy voice agent -> Run).
+# The manual path (ssh + deploy/oracle/deploy.sh, or the runbook) still works.
+# Setup and secrets: DEPLOY.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent/**"
+      - "content/resumedump.md"
+      - "deploy/oracle/**"
+      - ".github/workflows/agent.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push waits for the running one instead of
+# cutting it off mid-rebuild.
+concurrency:
+  group: agent-deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: agent/requirements.txt
+      - name: Install agent dependencies
+        run: pip install -r agent/requirements.txt pytest
+      - name: Agent tests
+        working-directory: agent
+        run: python -m pytest tests -q
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: SSH key
+        env:
+          KEY: ${{ secrets.AGENT_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.AGENT_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Deploy ${{ github.sha }}
+        env:
+          HOST: ${{ secrets.AGENT_DEPLOY_HOST }}
+        # The key can only run /opt/agent/ci-entry.sh (forced command), which
+        # deploys this exact commit with deploy/oracle/deploy.sh: waits for live
+        # calls, rebuilds, health-checks, and rolls back on failure.
+        run: ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes "ubuntu@$HOST" "deploy ${{ github.sha }}"

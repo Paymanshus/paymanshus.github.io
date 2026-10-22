@@ -19,6 +19,7 @@ resume on `/experience`.
 | `readmes/SPECs/DESIGN_SPEC.md` | Visual system — extend before inventing |
 | `readmes/SPECs/BLOG_VISUALS.md` | Inline SVG figure rules for blog posts |
 | `README.md` | Quickstart |
+| `DEPLOY.md` | How the site and the agent deploy (CI/CD on push to `main`, plus manual). Pushing to `main` deploys. |
 | `agent/RUN.md` | Local / Docker / Fly.io agent commands |
 | `docs/SEO_SETUP.md` | Owner GSC / GA4 / indexing runbook |
 | `readmes/SEOPLAN.md` | SEO/analytics board — Phase E is owner-only leftover |
