@@ -364,3 +364,19 @@ async def test_cached_lines_render_the_spoken_form(tmp_path):
     await voice_greeting.say_cached(FakeSession(), "my resume is on the site", tts=_RecTTS(),
                                     model="m", voice="v", cache_dir=tmp_path)
     assert rendered == ["my résumé is on the site"]
+
+
+async def test_prerender_only_renders_missing_lines(tmp_path):
+    tts = FakeTTS()
+    kw = dict(tts=tts, model="m", voice="v", cache_dir=tmp_path)
+    assert await voice_greeting.ensure_rendered(["Bye!", "Still there?"], **kw) == 2
+    assert await voice_greeting.ensure_rendered(["Bye!", "Still there?", "New line"], **kw) == 1
+    assert tts.calls == 3
+    session = FakeSession()
+    await voice_greeting.say_cached(session, "Bye!", **kw)
+    assert tts.calls == 3, "pre-rendered line plays from cache"
+
+
+async def test_prerender_survives_tts_failure(tmp_path):
+    assert await voice_greeting.ensure_rendered(["Bye!"], tts=FakeTTS(fail=True), model="m",
+                                                voice="v", cache_dir=tmp_path) == 0

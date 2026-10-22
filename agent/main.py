@@ -429,6 +429,14 @@ async def voice_agent(ctx: agents.JobContext):
 
     await say_line(random.choice(VOICE_GREETINGS))
 
+    # Render any fixed line that isn't cached yet, in the background, so the
+    # goodbye can play the instant a limit fires. Cached lines cost nothing;
+    # after an edit or a voice change each line renders once.
+    prerender_task = asyncio.create_task(voice_greeting.ensure_rendered(
+        (*VOICE_GREETINGS, VOICE_GOODBYE_TIME_LIMIT, VOICE_IDLE_CHECK, VOICE_GOODBYE_IDLE),
+        tts=cartesia_tts, model=tts_model_name, voice=tts_voice_id,
+    ))
+
     # ─── Session limits: hard cap and idle hang-up ─────────────
     ending = asyncio.Event()
 
@@ -484,7 +492,7 @@ async def voice_agent(ctx: agents.JobContext):
     limit_task = asyncio.create_task(_time_limit())
 
     async def _cancel_limits() -> None:
-        for task in (limit_task, idle_task):
+        for task in (limit_task, idle_task, prerender_task):
             if task is not None and not task.done():
                 task.cancel()
 

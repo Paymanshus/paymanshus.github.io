@@ -102,6 +102,28 @@ async def render(text: str, tts, key: str, cache_dir: Path | None = None) -> tup
     return pcm, sample_rate, num_channels
 
 
+async def ensure_rendered(lines, *, tts, model: str, voice: str,
+                          cache_dir: Path | None = None) -> int:
+    """Render any of `lines` that aren't cached yet; returns how many were
+    rendered. Run in the background at session start, so a goodbye or a new
+    greeting never waits on TTS when it's needed (the first probe showed the
+    goodbye spending 1.7 s rendering right as the call was ending)."""
+    import voice_lexicon
+
+    rendered = 0
+    for text in lines:
+        spoken = voice_lexicon.spoken_form(text)
+        key = cache_key(spoken, model=model, voice=voice)
+        if load_pcm(key, cache_dir) is not None:
+            continue
+        try:
+            await render(spoken, tts, key, cache_dir)
+            rendered += 1
+        except Exception as e:
+            logger.warning("voice cache: pre-render failed for %r: %s", text[:60], e)
+    return rendered
+
+
 async def say_cached(session, text: str, *, tts, model: str, voice: str,
                      allow_interruptions: bool = True, cache_dir: Path | None = None):
     """Speak `text` from cached audio, rendering it once if needed. Returns the
