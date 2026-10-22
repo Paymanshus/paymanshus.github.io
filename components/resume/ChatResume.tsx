@@ -141,6 +141,59 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;');
 }
 
+// Shown while a free-form query is in flight, rotated in a shuffled order so
+// a visitor never sees the same line twice in a row.
+const THINKING_MESSAGES = [
+  "Triangulating",
+  "Discombobulating",
+  "Debating with self",
+  "Zoning out (then back in)",
+  "Thinking deep thoughts",
+  "Strategizing",
+  "Faking thinking really long",
+  "Consulting the résumé oracle",
+  "Overthinking it",
+  "Rummaging through memories",
+  "Connecting the dots",
+  "Pretending to be busy",
+  "Asking the rubber duck",
+  "Counting backwards from infinity",
+  "Untangling neurons",
+  "Reticulating splines",
+  "Reading the fine print",
+];
+
+const THINKING_ROTATE_MS = 1800;
+
+function shuffled<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function ThinkingLine() {
+  const [order] = useState(() => shuffled(THINKING_MESSAGES));
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(
+      () => setIndex(i => (i + 1) % order.length),
+      THINKING_ROTATE_MS
+    );
+    return () => clearInterval(id);
+  }, [order.length]);
+
+  return (
+    <div className="text-[#666666]" aria-live="polite">
+      <span className="animate-pulse">{order[index]}...</span>
+      <span className="terminal-cursor ml-1 align-[-0.15em]" />
+    </div>
+  );
+}
+
 export default function ChatResume() {
   const [history, setHistory] = useState<string[]>([]);
   const [input, setInput] = useState('');
@@ -304,9 +357,7 @@ export default function ChatResume() {
           ))}
 
           {isThinking && (
-            <div className="text-[#666666] animate-pulse">
-              PROCESSING QUERY<span className="terminal-cursor ml-1 align-[-0.15em]" />
-            </div>
+            <ThinkingLine />
           )}
 
           {!isBooting && !isThinking && (
@@ -327,7 +378,6 @@ export default function ChatResume() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   className="absolute inset-0 min-w-0 w-full bg-transparent border-none outline-none text-transparent caret-transparent"
-                  style={{ caretColor: '#ff2a2a' }}
                   autoFocus
                   spellCheck={false}
                   autoComplete="off"
