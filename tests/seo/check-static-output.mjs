@@ -101,7 +101,7 @@ console.log('home /');
 }
 
 // ─── Section indexes ────────────────────────────────────────────────
-for (const route of ['experience', 'thoughts']) {
+for (const route of ['experience', 'cooking', 'thoughts']) {
   console.log(`route /${route}/`);
   const html = readHtml(`${route}/index.html`);
   if (html) {
@@ -213,6 +213,7 @@ console.log('robots + sitemap');
     const robots = fs.readFileSync(robotsPath, 'utf8');
     const sitemap = fs.readFileSync(sitemapPath, 'utf8');
     check('robots.txt points at sitemap', robots.includes(`Sitemap: ${SITE_URL}/sitemap.xml`));
+    check('sitemap lists /cooking/', sitemap.includes(`${SITE_URL}/cooking/`));
     for (const slug of publishedSlugs()) {
       check(`sitemap lists ${slug}`, sitemap.includes(`${SITE_URL}/thoughts/${slug}/`));
     }

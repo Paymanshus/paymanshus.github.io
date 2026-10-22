@@ -10,10 +10,11 @@ Current public routes:
 
 - `/`: fullscreen landing / hero
 - `/experience/`: resume surface with `pdf`, `chat`, and `voice` modes
+- `/cooking/`: "what's cooking", a single scrolling page of side projects in progress
 - `/thoughts/`: blog index
 - `/thoughts/[slug]/`: static article pages generated from local Markdown
 
-The home route is a no-scroll hero state. The experience and thoughts routes are normal scroll pages inside the shared site shell.
+The home route is a no-scroll hero state. The experience, cooking and thoughts routes are normal scroll pages inside the shared site shell.
 
 ## Stack
 
@@ -98,6 +99,50 @@ The home route is a no-scroll hero state. The experience and thoughts routes are
 - `components/ReadingProgressBar.tsx`
   Client-side top progress bar using `useScroll()`.
 
+### Cooking route ("what's cooking")
+
+- `app/cooking/page.tsx`
+  Static route with `CollectionPage` structured data; each project is a
+  `CreativeWork` list item whose URL is the page plus `#<slug>`.
+- `components/cooking/CookingSection.tsx`
+  Server component: page header and the gallery.
+- `components/cooking/CookingGallery.tsx`
+  Client. Card grid (1 / 2 / 3 columns at base / `sm` / `xl`) plus the open
+  detail view. The open project lives in the URL hash: opening `pushState`s
+  `#<slug>`, closing pops it, so `/cooking/#cerebro` deep-links and the back
+  button closes the modal. `MotionConfig reducedMotion="user"` turns transforms
+  off for reduced-motion users.
+- `components/cooking/ProjectCard.tsx`
+  The "magnet" card. Pointer position (-0.5..0.5) drives sprung `rotateX` /
+  `rotateY` (max 9°) so the part under the pointer rises toward the viewer and
+  the opposite edge dips. Signs are flipped from CSS defaults because
+  `rotateX(+)` pushes the top edge away. A shadow shifts away from the lifted
+  side. Two grid layers: grey 24px lines at rest, and a red copy masked to a
+  200px radial around the pointer that fades in on hover and also crosses the
+  thumbnail. Touch uses the same pointer events (pointerdown engages, pointerup
+  or pointercancel releases). The whole card opens the modal through a
+  stretched `<button>`; links sit above it at `z-10`.
+- `components/cooking/ProjectModal.tsx`
+  The detail view. It shares `layoutId="cooking-card-<slug>"` with its card, so
+  the card morphs into the panel. The image also shares a layoutId when the
+  hero is the thumbnail. The panel is about 88dvh tall and max 6xl wide on
+  desktop, and almost full screen on phones (`100dvh - 1rem`). It has a mono
+  path header (`> ~/cooking/<slug>`, `[ esc ] close`), corner ticks and one red
+  scan line on open. Inside: hero, then the writeup (`.thought-post-content
+  .cooking-writeup`) beside a sticky fact column (status, date, stack, links),
+  then the screenshot gallery. Escape, the backdrop and the close button all
+  close it. Body scroll is locked while it is open, and focus returns to the
+  card on close.
+- `components/cooking/ScreenGallery.tsx`
+  A fixed 16:10 letterboxed stage, `<` `>` buttons, arrow keys, the caption
+  (the image alt) with an `NN / NN` counter, and a thumbnail row. It is not a
+  native horizontal scroller.
+- `components/cooking/shared.tsx`
+  Status tag, links (`> live`, `> source` plus a GitHub mark), meta text style.
+- Analytics: dwell as `cooking_index`, plus `cooking_open {project}` per detail view.
+- Nav label is `what's cooking` from `sm` up and `cooking` below it, with nav
+  tracking tightened under `sm` so four items fit at 375px.
+
 ## Content System
 
 Blog content lives in `content/blog/`.
@@ -140,6 +185,34 @@ carry `published: false`, so they are excluded from the index, from
 `getAllBlogSlugs()`, and return 404 on direct access.
 
 Blog content is covered by `tests/blog/blog-content.test.mjs`.
+
+### Cooking projects
+
+Project entries live in `content/cooking/*.md` and load through
+`lib/cooking.ts`. **Order and visibility come from `content/cooking/_order.txt`**:
+one slug per line, top first. Moving a line reorders, a `#` in front hides the
+project, and an unlisted file stays hidden (the build warns and names it).
+Listing a slug with no file fails the build. `_template.md` documents every
+field. Files starting `_` are never projects.
+
+The body is the long-form writeup (minutes, not a blurb), rendered with
+`remark + gfm + html` and `sanitize: false` so it can embed images and inline
+SVG figures, like blog posts.
+
+Frontmatter: `title`, `summary` (card line), `date` (last meaningful update),
+`status` (`building` | `early`; `shipped` is commented out in `PROJECT_STATUSES`
+until something ships), `stack` (list), optional `repo` (omit for private
+repos, and "private repo" is shown instead), optional `live`, optional
+`thumbnail` (card), optional `hero` (detail-view top, defaults to the
+thumbnail), and optional `media` (gallery). Every image is
+`{src, alt, width, height}`, and a missing field fails the build.
+
+Media lives in `public/cooking/<slug>/` as WebP. Convert source images with
+`node scripts/optimize-cooking-media.mjs <in> <out.webp> [maxW] [maxH]`. It
+prints the final pixel size to copy into frontmatter. It is not part of the
+build. For projects with no UI to screenshot, the thumbnail is a graphic made
+with the `ps-redblack-visuals` skill (CereBro's is the first), rendered to PNG
+and then converted with the same script.
 
 ## Typography Implementation
 
@@ -315,7 +388,9 @@ This keeps rollback simple because the old history remains in the same repositor
 
 A standalone Python service in `agent/` that handles the real-time voice pipeline for the `/experience` voice mode. It runs separately from the Next.js app and communicates only through LiveKit's WebRTC infrastructure.
 
-**Hosting: Oracle Cloud Always Free ARM VM (1 OCPU / 6 GB, `ap-hyderabad-1`) behind Caddy at `https://ps-agent.duckdns.org`; runbook in `deploy/oracle/README.md`. The static site is pointed at that URL via `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. The turn detector runs there (it is only skipped by default when `RAILWAY_ENVIRONMENT` is set). Railway (`railway.toml`) is retired; its trial lapsed on 2026-10-13.**
+**Hosting: Oracle Cloud ARM VM (`ap-hyderabad-1`) behind Caddy at `https://ps-agent.duckdns.org`; runbook, account/budget details and the 2026-11-10 switch-back in `deploy/oracle/README.md`. Sized 4 OCPU / 24 GB on trial credit for the launch window, back to ≤ 2 OCPU / 12 GB (Always Free) by 2026-11-10.**
+**Voice is capped at 5 concurrent calls (LiveKit Cloud free plan) by `voice_availability.py`; see "Voice availability" below.**
+**Hosting history: The static site is pointed at that URL via `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. The turn detector runs there (it is only skipped by default when `RAILWAY_ENVIRONMENT` is set). Railway (`railway.toml`) is retired; its trial lapsed on 2026-10-13.**
 
 Note for any hosting work: the agent worker registers with LiveKit Cloud over an **outbound** WebSocket and needs no public inbound ports. Only the `token_server.py` HTTP endpoints (:8080) require a public URL.
 
@@ -326,10 +401,10 @@ Note for any hosting work: the agent worker registers with LiveKit Cloud over an
 | Runtime | Python 3.11 + asyncio | Isolated venv at `agent/.venv/` |
 | Agent framework | `livekit-agents` 1.5.1 | Worker + session lifecycle |
 | STT | Deepgram Nova-3 | Primary; Google Chirp as fallback via `USE_GOOGLE_STT=true` |
-| LLM | Multi-provider ladder (`llm_ladder.py`) — OpenRouter first, Gemini direct last, shared quota breaker | Voice: `deepseek-v4.1-flash-1017 → claude-haiku-5.5 → gemini-3.1-flash-lite (OpenRouter) → gemini-flash-lite-latest (AI Studio)`, rungs 1+2 hedged after 1.2 s. Terminal: Haiku 5.5 first. Reasoning off on OpenRouter calls. Canary health checks (`llm_health.py`). Measurements: `readmes/perf/2026-10-22/` (local) |
-| TTS | Cartesia `sonic-3` → Deepgram Aura via `tts.FallbackAdapter` | Bare `sonic` was sunsetted by Cartesia (400). Model via `CARTESIA_MODEL`, voice via `CARTESIA_VOICE_ID`. Verified with `tests/probe_cartesia.sh` |
+| LLM | One benchmarked primary per surface, ladder as fallback (`llm_ladder.py`, `llm_voice.py`, `llm_health.py`) | Voice: `deepseek-v4.1-flash-1017 → claude-haiku-5.5 → gemini-3.1-flash-lite` (all OpenRouter, `reasoning: none`) `→ gemini-flash-lite-latest` (AI Studio). Terminal: Haiku 5.5 first. Voice hedges to rung 2 after 1.2 s without a token; 1-token canaries on token mint and every 10 min demote slow rungs; warm-up call at session start. Benchmarks: `readmes/perf/2026-10-21/`, `readmes/perf/2026-10-22/` (local). Override with `VOICE_LADDER` / `LLM_LADDER` |
+| TTS | Cartesia `sonic-3` → Deepgram Aura via `tts.FallbackAdapter` | Bare `sonic` was sunsetted by Cartesia (400). Model via `CARTESIA_MODEL`, voice via `CARTESIA_VOICE_ID` (instant-cloned voice). Verified with `tests/probe_cartesia.sh`. Plan: Cartesia Pro, 100k credits/month included, then $65 per 1M credits; sonic-3 is 1 credit per character, so ~$0.065 per 1k characters, which is the rate session cost estimates use. |
 | VAD | Silero (local) | `livekit-plugins-silero`; no API call, no cost |
-| Turn detection | LiveKit Multilingual Model (local default) | Skipped on Railway unless `VOICE_TURN_DETECTOR=true` — the EOU inference child is ~500MB and OOM-kills Trial/Free. Silero VAD endpointing is the fallback. |
+| Turn detection | LiveKit Multilingual Model (local default) | Imported at module level in `main.py` so `download-files` bakes the model into the image and the inference runner registers in the main process (a lazy in-job import crashed every voice job on 2026-10-21). Skipped on Railway unless `VOICE_TURN_DETECTOR=true`. Silero VAD endpointing is the fallback. |
 
 ### Directory structure
 
@@ -337,11 +412,14 @@ Note for any hosting work: the agent worker registers with LiveKit Cloud over an
 agent/
 ├── main.py                # Agent entrypoint — worker registration + session wiring
 │                          # + token server started in a daemon thread
-├── token_server.py        # HTTP server on :8080 — /api/token, /api/chat(/stream), /api/health
+├── token_server.py        # HTTP server on :8080 — /api/token, /api/chat(/stream), /api/health,
+│                          #   /api/voice/status, /api/voice/notify
+├── voice_availability.py  # 5-call cap, monthly minutes, kill switch, email waitlist
 ├── prompts.py             # Persona (shared core + terminal/voice registers), fixed voice lines
 ├── voice_greeting.py      # Render-once, cache-on-disk audio for fixed voice lines
-├── llm_voice.py           # Voice LLM: breaker guard, hedging, warm-up, prompt-size caps
-├── llm_health.py          # Canary health checks shared with voice sessions
+├── voice_lexicon.py       # STT word fixes, TTS spoken forms, optional Deepgram keyterms
+├── llm_voice.py           # Voice LLM: breaker guard, hedging, warm-up, per-call context, caps
+├── llm_health.py          # 1-token canaries that demote slow LLM rungs
 ├── resume_context.py      # ContentIndex (BM25) + get_resume_index() singleton
 ├── requirements.txt       # Python dependencies (+ pytest-asyncio for tests)
 ├── .env.example           # Credential template (committed)
@@ -352,6 +430,8 @@ agent/
 │   ├── test_resume_context.py   # ContentIndex unit tests (55 tests incl. scored search)
 │   ├── test_token_server.py     # Token minting/CORS/rate-limit tests
 │   ├── test_llm_ladder.py       # Ladder walk, quota breaker, prompt layout
+│   ├── test_llm_primary.py      # Primary/hedge/canary/warm-up behaviour
+│   ├── test_voice_availability.py # Cap, limits, waitlist, status/notify endpoints
 │   ├── probe_cartesia.sh        # Cartesia TTS model availability probe
 │   ├── probe_llm.py             # Per-rung availability + TTFT + streaming probe
 │   ├── eval_context_modes.py    # Prompt-layout / caching comparison harness
@@ -398,6 +478,34 @@ Runs in a daemon thread inside the same process as the agent (port via
     OpenRouter provisioning key's monthly `limit`, which survives a restart.
     The token cap stays at 300/day because it bounds Cartesia and LiveKit, which
     are the genuinely expensive parts (~$0.10/session vs ~$0.003 of LLM).
+
+### Voice availability (`voice_availability.py`)
+
+LiveKit Cloud's free Build plan allows 5 concurrent agent sessions and 1,000
+agent minutes a month, and never refuses a 6th caller: the agent just doesn't
+join, and the page used to sit on "summoning the agent". Availability is now
+checked before a token is minted, and every reason is reported to the page.
+
+- `GET /api/voice/status` → `{available, reason, active, cap, retry_after_s?,
+  back_at?, minutes_used, minutes_cap}`. `/api/token` returns the same body with
+  `503` when refused.
+- Reasons: `busy` (live `voice-resume-*` rooms from LiveKit's room list, plus
+  tokens minted in the last 45 s, ≥ `VOICE_MAX_CONCURRENT`, default 5),
+  `monthly_limit` (agent minutes recorded by each voice job on shutdown ≥
+  `VOICE_MONTHLY_MINUTES`, default 950; resets on `VOICE_QUOTA_RESET_DAY`),
+  `daily_limit` (the 300/day global token cap), `disabled`
+  (`VOICE_DISABLED=true`). The browser adds `no_show`: token granted but no
+  agent after 20 s.
+- `POST /api/voice/notify {email, reason}` stores an email in
+  `VOICE_STATE_DIR/voice_waitlist.jsonl` (rate-limited, deduped). With `SMTP_*`
+  set, a background task emails pending entries once when voice is available
+  again.
+- State (`VOICE_STATE_DIR`) is a Docker volume on the VM, so minutes and the
+  waitlist survive rebuilds.
+- Frontend: `VoiceResume.tsx` checks `/api/voice/status` before asking for the
+  microphone and shows `UnavailableView` with per-reason copy, an "Open the
+  terminal" button (switches the resume tab to chat) and the optional email
+  box. GA events: `voice_unavailable`, `voice_waitlist_join`.
 
 ### LLM ladder (`llm_ladder.py`, `llm_models.py`, `llm_context.py`)
 
@@ -452,16 +560,20 @@ Browser ←—WebRTC—→ LiveKit Cloud SFU ←—WebRTC—→ agent/main.py
 ```
 
 `main.py` key components:
-- `PaymanshuAgent` — `Agent` subclass. Resume context is injected **per turn**
-  via `on_user_turn_completed` (NOT an LLM tool — a tool call costs a full
+- `PaymanshuAgent` — `Agent` subclass. Resume context is injected **per LLM
+  call** in its `llm_node` override (NOT an LLM tool — a tool call costs a full
   extra LLM round-trip ~600ms+ per question; injection is ~0.3ms of BM25 and
   zero extra inference). Routing: BM25 top-2 when `search_scored()` top score
-  ≥ `RESUME_SCORE_THRESHOLD` (2.5), otherwise the full resume (~2.5K tokens)
-  is injected. Context is added to the turn only, so history doesn't
-  accumulate resume copies.
+  ≥ `RESUME_SCORE_THRESHOLD` (2.5), otherwise the full resume (~2.5K tokens).
+  `llm_voice.prepare_voice_ctx` builds it on a copy of the chat context, with
+  the STT word fixes and long-turn trim, so history never accumulates resume
+  copies and LiveKit's preemptive generation stays valid. (Injecting in
+  `on_user_turn_completed` invalidated it on every turn: two LLM calls per
+  turn, and the reply waited for the second.)
 - `voice_agent()` — `@server.rtc_session` handler; constructs models and `AgentSession` per visitor connection
 - **Latency design**: `preemptive_generation=True` (LLM+TTS start on interim
-  transcript during endpointing), `min_delay=0.4s` (env `MIN_ENDPOINTING_DELAY`)
+  transcript during endpointing), dynamic endpointing 0.4-2.5 s (env
+  `ENDPOINTING_MODE`, `MIN_ENDPOINTING_DELAY`, `MAX_ENDPOINTING_DELAY`)
   set via `turn_handling=TurnHandlingOptions(turn_detection=..., endpointing={"min_delay": ...})`
   (migrated 2026-07-10 off the deprecated top-level `min_endpointing_delay`
   kwarg, removed in livekit-agents 2.0), `VOICE_MAX_OUTPUT_TOKENS=140` cap +
@@ -630,7 +742,8 @@ The voice agent server (`agent/`) is the first backend service and is now scaffo
   lifetime deposit is what raises `:free` from 50 to 1,000 RPD. Also
   `tests/eval_context_modes.py` still needs a full run to pick the
   `LLM_CONTEXT_MODE` default from data rather than reasoning.
-- **Feature 07**: Deployment — Oracle Always Free ARM VM running `deploy/oracle/compose.yaml` (agent built from `agent/Dockerfile` with repo-root context, plus Caddy for HTTPS). Public URL is `https://ps-agent.duckdns.org`. Pages gets it from `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. Worker must stay always-on. Previously on Railway (`railway.toml`), where `VOICE_TURN_DETECTOR` defaulted off so the EOU subprocess would not OOM.
+- **Feature 08**: Voice availability — ✅ 5-call cap, limits, unavailable screen and waitlist (2026-10-22). Open: configure `SMTP_*` for automatic "back" emails; LiveKit Cloud upgrade or self-hosting (`readmes/livekit_selfhost_option.md`, local) if 5 concurrent calls isn't enough.
+- **Feature 07**: Deployment — Oracle ARM VM running `deploy/oracle/compose.yaml` (agent built from `agent/Dockerfile` with repo-root context, plus Caddy for HTTPS). Public URL is `https://ps-agent.duckdns.org`. Pages gets it from `NEXT_PUBLIC_AGENT_URL` in `.github/workflows/deploy.yml`. Worker must stay always-on. Previously on Railway (`railway.toml`), where `VOICE_TURN_DETECTOR` defaulted off so the EOU subprocess would not OOM.
 
 Integration rules going forward:
 

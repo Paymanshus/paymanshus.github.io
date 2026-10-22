@@ -1,5 +1,8 @@
 # Deploy the Voice Agent to fly.io — Runbook
 
+> **Superseded (2026-10-22).** The agent runs on an Oracle Cloud VM; see
+> `deploy/oracle/README.md`. Kept for history only.
+
 > For a future agent session + owner. Everything below is ready; the only
 > blockers are owner credentials (`flyctl auth login`) and secret values.
 > Once done, the live site's voice + terminal LLM work for ALL visitors,

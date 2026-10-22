@@ -1,0 +1,14 @@
+# Display order for /cooking: one project per line, top line shows first.
+# A project is its file name in this folder without ".md" (wrappedapp.md -> wrappedapp).
+#
+#   reorder  -> move the line
+#   hide     -> put "#" in front of the line (or delete it)
+#   add      -> create <slug>.md here (copy an existing one), then list the slug below
+#
+# Files that are not listed stay hidden; the build prints a warning naming them.
+
+wrappedapp
+cerebro
+watchlistxplore
+pswiki
+second-voice

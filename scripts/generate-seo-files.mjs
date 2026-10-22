@@ -102,6 +102,12 @@ function writeSitemapFile() {
       priority: '0.8',
     },
     {
+      url: absoluteUrl('/cooking'),
+      lastModified: new Date().toISOString(),
+      changeFrequency: 'weekly',
+      priority: '0.8',
+    },
+    {
       url: absoluteUrl('/thoughts'),
       lastModified: new Date().toISOString(),
       changeFrequency: 'weekly',
