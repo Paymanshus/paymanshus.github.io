@@ -422,9 +422,13 @@ Note for any hosting work: the agent worker registers with LiveKit Cloud over an
 agent/
 ├── main.py                # Agent entrypoint — worker registration + session wiring
 │                          # + token server started in a daemon thread
-├── token_server.py        # HTTP server on :8080 — /api/token, /api/chat, /api/health,
+├── token_server.py        # HTTP server on :8080 — /api/token, /api/chat(/stream), /api/health,
 │                          #   /api/voice/status, /api/voice/notify
 ├── voice_availability.py  # 5-call cap, monthly minutes, kill switch, email waitlist
+├── prompts.py             # Persona (shared core + terminal/voice registers), fixed voice lines
+├── voice_greeting.py      # Render-once, cache-on-disk audio for fixed voice lines
+├── voice_lexicon.py       # STT word fixes, TTS spoken forms, optional Deepgram keyterms
+├── llm_voice.py           # Voice LLM: breaker guard, hedging, warm-up, per-call context, caps
 ├── llm_health.py          # 1-token canaries that demote slow LLM rungs
 ├── resume_context.py      # ContentIndex (BM25) + get_resume_index() singleton
 ├── requirements.txt       # Python dependencies (+ pytest-asyncio for tests)
@@ -465,6 +469,13 @@ Runs in a daemon thread inside the same process as the agent (port via
   tells the frontend to use its keyword fallback. Request/response shapes are
   unchanged from the original Gemini-only implementation, so the frontend needed
   no change.
+- `POST /api/chat/stream` — same request and validation, answered as
+  Server-Sent Events: `data: {"delta": "..."}` per piece, then `{"done": true}`
+  or `{"error": "llm_unavailable"}`. SSE over fetch, not a websocket: one-way
+  tokens, no connection management, and Caddy passes `text/event-stream`
+  through. The ladder only falls through to the next model before any text has
+  been sent. `ChatResume.tsx` (`lib/chatStream.ts`) streams first and falls back
+  to `/api/chat`, then to the offline keyword answers.
 - CORS restricted to `paymanshus.github.io` + localhost dev origins.
 - In-memory rate limits (per-IP/minute, per-IP/day, global/day, **global/minute**):
   token `6/30/300/20`, chat `10/100/3000/60`. 429 responses carry a
@@ -559,16 +570,20 @@ Browser ←—WebRTC—→ LiveKit Cloud SFU ←—WebRTC—→ agent/main.py
 ```
 
 `main.py` key components:
-- `PaymanshuAgent` — `Agent` subclass. Resume context is injected **per turn**
-  via `on_user_turn_completed` (NOT an LLM tool — a tool call costs a full
+- `PaymanshuAgent` — `Agent` subclass. Resume context is injected **per LLM
+  call** in its `llm_node` override (NOT an LLM tool — a tool call costs a full
   extra LLM round-trip ~600ms+ per question; injection is ~0.3ms of BM25 and
   zero extra inference). Routing: BM25 top-2 when `search_scored()` top score
-  ≥ `RESUME_SCORE_THRESHOLD` (2.5), otherwise the full resume (~2.5K tokens)
-  is injected. Context is added to the turn only, so history doesn't
-  accumulate resume copies.
+  ≥ `RESUME_SCORE_THRESHOLD` (2.5), otherwise the full resume (~2.5K tokens).
+  `llm_voice.prepare_voice_ctx` builds it on a copy of the chat context, with
+  the STT word fixes and long-turn trim, so history never accumulates resume
+  copies and LiveKit's preemptive generation stays valid. (Injecting in
+  `on_user_turn_completed` invalidated it on every turn: two LLM calls per
+  turn, and the reply waited for the second.)
 - `voice_agent()` — `@server.rtc_session` handler; constructs models and `AgentSession` per visitor connection
 - **Latency design**: `preemptive_generation=True` (LLM+TTS start on interim
-  transcript during endpointing), `min_delay=0.4s` (env `MIN_ENDPOINTING_DELAY`)
+  transcript during endpointing), dynamic endpointing 0.4-2.5 s (env
+  `ENDPOINTING_MODE`, `MIN_ENDPOINTING_DELAY`, `MAX_ENDPOINTING_DELAY`)
   set via `turn_handling=TurnHandlingOptions(turn_detection=..., endpointing={"min_delay": ...})`
   (migrated 2026-07-10 off the deprecated top-level `min_endpointing_delay`
   kwarg, removed in livekit-agents 2.0), `VOICE_MAX_OUTPUT_TOKENS=140` cap +
@@ -579,7 +594,21 @@ Browser ←—WebRTC—→ LiveKit Cloud SFU ←—WebRTC—→ agent/main.py
   listening indicator for LLM fallback / TTS degraded; TTS `down` still gets
   the amber banner. OpenRouter 401s lock as `KIND_CREDITS` (24h) rather than a
   20s `server_error` retry loop. Gemini deadline-too-short 400s are not locked.
-- Greeting via `session.generate_reply()` with `session.say()` fallback
+- **Persona**: `prompts.py` holds one shared core voice plus a texting register
+  (terminal) and a spoken register (voice), with short in-voice examples.
+- **Fixed lines from cached audio** (`voice_greeting.py`): the greeting (random
+  from `prompts.VOICE_GREETINGS`) and the goodbye/idle lines are synthesized once
+  with Cartesia, cached as WAV under `VOICE_AUDIO_CACHE_DIR` (the state volume on
+  the VM), and played with `session.say(audio=...)`: no LLM call and no TTS
+  credits after the first render. Falls back to live TTS on any cache error.
+- **Session limits**: hard cap `VOICE_MAX_SESSION_S` (300 s) and an idle
+  hang-up (user "away" after `VOICE_USER_AWAY_S`, then "Still there?", then
+  goodbye after `VOICE_IDLE_GRACE_S`). Before closing the room the agent sets
+  participant attribute `voice.end_reason` (`time_limit` / `idle`), which
+  `VoiceResume.tsx` shows. Long user turns: LiveKit `user_turn_limit`
+  (`VOICE_MAX_TURN_WORDS`, ~45 s of speech) cuts in politely, and each turn sends
+  at most the last `VOICE_MAX_USER_CHARS` (600) characters to the LLM; the voice
+  context is capped at `VOICE_MAX_CONTEXT_ITEMS` (40).
 - **Prewarm** (`server.setup_fnc`): builds the resume BM25 index and imports
   `httpcore` + `livekit.plugins.openai` so those ~1s first-use imports do not
   block the session event loop. Silero still loads in the session.

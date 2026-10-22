@@ -27,6 +27,9 @@ services:
       VOICE_QUOTA_RESET_DAY: "1"
       VOICE_STATE_DIR: /app/state
       LLM_BREAKER_STATE_PATH: /app/state/llm_breaker.json
+      # Pre-rendered greeting/goodbye audio (agent/voice_greeting.py): rendered
+      # once per line, then free. On the state volume so rebuilds keep it.
+      VOICE_AUDIO_CACHE_DIR: /app/state/voice-audio
     volumes:
       # Minutes used, the "tell me when you're back" waitlist and the LLM
       # breaker's daily locks. A named volume, so they survive rebuilds.

@@ -292,9 +292,12 @@ def _record_attempt(ctx, entry, outcome) -> None:
         logger.warning("Langfuse generation record failed: %s", e)
 
 
-async def _generate_reply(ctx, *, session_id: str | None = None) -> tuple[str, str | None]:
+async def _generate_reply(ctx, *, session_id: str | None = None,
+                          on_delta=None) -> tuple[str, str | None]:
     """Walk the terminal ladder. Returns (reply, model_used); ("", None) on
-    exhaustion, which the caller turns into 503 llm_unavailable."""
+    exhaustion, which the caller turns into 503 llm_unavailable. With
+    `on_delta`, text is relayed as it streams (see chat_stream)."""
+    extra = {"on_delta": on_delta} if on_delta is not None else {}
     result = await llm_ladder.generate(
         ctx,
         ladder=llm_models.LLM_LADDER,
@@ -303,6 +306,7 @@ async def _generate_reply(ctx, *, session_id: str | None = None) -> tuple[str, s
         temperature=llm_models.TERMINAL_TEMPERATURE,
         session_id=session_id,
         on_attempt=lambda entry, outcome: _record_attempt(ctx, entry, outcome),
+        **extra,
     )
     if result is None:
         return "", None
@@ -321,7 +325,10 @@ async def _generate_reply(ctx, *, session_id: str | None = None) -> tuple[str, s
     return result.text, (result.resolved_model or result.entry_label)
 
 
-async def chat(request: web.Request) -> web.Response:
+async def _parse_chat_request(request: web.Request):
+    """Shared by /api/chat and /api/chat/stream: rate limit, validate, build the
+    prompt. Returns (ctx, message, history, visitor, session_id) or an error
+    response to send as-is."""
     if err := _check_rate_limit(request, "chat"):
         return web.json_response({"error": err}, status=429, headers=_cors_headers(request))
 
@@ -355,6 +362,63 @@ async def chat(request: web.Request) -> web.Response:
     # Doubles as OpenRouter's sticky-routing key, which keeps a returning visitor
     # on the provider holding their cached prefix.
     session_id = f"terminal-{visitor}-{time.strftime('%Y%m%d')}"
+    return ctx, message, history, visitor, session_id
+
+
+async def chat_stream(request: web.Request) -> web.StreamResponse:
+    """/api/chat streamed as Server-Sent Events: `data: {"delta": "..."}` per
+    text piece, then `data: {"done": true}`, or `data: {"error": "llm_unavailable"}`
+    (the frontend then uses its local fallback, same as a 503 from /api/chat).
+
+    SSE rather than a websocket: tokens only flow one way, it's a plain POST
+    the browser can read with fetch(), and Caddy passes text/event-stream
+    through unbuffered. Validation errors (rate limit, bad JSON) are ordinary
+    JSON responses before the stream starts.
+    """
+    parsed = await _parse_chat_request(request)
+    if isinstance(parsed, web.StreamResponse):
+        return parsed
+    ctx, message, history, visitor, session_id = parsed
+
+    resp = web.StreamResponse(headers={
+        **_cors_headers(request),
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    })
+    await resp.prepare(request)
+
+    queue: asyncio.Queue = asyncio.Queue()
+    task = asyncio.create_task(
+        _generate_reply(ctx, session_id=session_id, on_delta=queue.put_nowait)
+    )
+    try:
+        while True:
+            get = asyncio.ensure_future(queue.get())
+            done, _ = await asyncio.wait({get, task}, return_when=asyncio.FIRST_COMPLETED)
+            if get in done:
+                await resp.write(f"data: {json.dumps({'delta': get.result()})}\n\n".encode())
+                continue
+            get.cancel()
+            while not queue.empty():  # pieces that landed with the last chunk
+                await resp.write(f"data: {json.dumps({'delta': queue.get_nowait()})}\n\n".encode())
+            reply, _model = task.result()
+            final = {"done": True} if reply else {"error": "llm_unavailable"}
+            await resp.write(f"data: {json.dumps(final)}\n\n".encode())
+            break
+    except (ConnectionResetError, asyncio.CancelledError):
+        # Visitor closed the tab mid-reply: stop paying for the rest of it.
+        task.cancel()
+        raise
+    await resp.write_eof()
+    return resp
+
+
+async def chat(request: web.Request) -> web.Response:
+    parsed = await _parse_chat_request(request)
+    if isinstance(parsed, web.StreamResponse):
+        return parsed
+    ctx, message, history, visitor, session_id = parsed
 
     langfuse = get_langfuse()
     if langfuse is not None:
@@ -459,6 +523,8 @@ def create_token_app() -> web.Application:
     app.router.add_options("/api/token", handle_cors_preflight)
     app.router.add_post("/api/chat", chat)
     app.router.add_options("/api/chat", handle_cors_preflight)
+    app.router.add_post("/api/chat/stream", chat_stream)
+    app.router.add_options("/api/chat/stream", handle_cors_preflight)
     app.router.add_get("/api/health", health_check)
     app.router.add_get("/api/voice/status", voice_status)
     app.router.add_post("/api/voice/notify", voice_notify)
