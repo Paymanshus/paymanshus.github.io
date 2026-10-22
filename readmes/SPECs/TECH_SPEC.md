@@ -56,8 +56,13 @@ The home route is a no-scroll hero state. The experience, cooking and thoughts r
   Owns the resume mode toggle.
   Current default mode is `chat`.
   Mode panels are lazy-loaded with `next/dynamic` to reduce route JS.
-- `components/resume/PdfResume.tsx`
-  Loads the PDF iframe after mount to avoid competing with initial route transition.
+- `components/resume/HtmlResume.tsx`
+  Resume tab (mode key stays `pdf` so analytics series continue). Embeds
+  `public/assets/Paymanshu_Sharma_Resume.html` in a same-origin iframe, injects
+  screen-only CSS on load (`EMBED_CSS`), retargets its links, and sizes the frame
+  to the document body with a `ResizeObserver` from the frame's own window.
+  "Get the PDF" links `public/assets/Paymanshu_Sharma_Resume.pdf`. To update the
+  resume, replace both files with fresh exports; nothing else changes.
 - `components/resume/ChatResume.tsx`
   Terminal interface with boot sequence, local command map fast-path, and LLM
   backend for free-form questions (`POST {NEXT_PUBLIC_AGENT_URL}/api/chat`).
@@ -72,10 +77,15 @@ The home route is a no-scroll hero state. The experience, cooking and thoughts r
   amplitude-driven via Web Audio `AnalyserNode` on both the agent audio track
   and the local mic track; accent color crossfades red (user speaking) ↔
   green (agent speaking) ↔ amber (thinking).
+  The agent track is read as an averaged byte spectrum; the mic track as RMS
+  on a dB scale (`useTrackAmplitude(track, 'level')`), because a live mic's
+  room noise put a 0.15–0.25 floor under the spectrum average and speech
+  barely moved the field. Layout of a live call is `SessionLayout`, kept free
+  of LiveKit hooks so it can be rendered with mock data.
   UX behaviors:
   - Transcript coalescing: consecutive STT segments from the same speaker are
     merged into one flowing line; new lines only on speaker change, so chunk
-    boundaries are invisible.
+    boundaries are invisible. `<|…|>` control tokens are stripped.
   - Mic permission is a one-time experience: Permissions API check +
     `localStorage['ps-voice-mic-granted']` fallback skip the modal on
     subsequent visits.

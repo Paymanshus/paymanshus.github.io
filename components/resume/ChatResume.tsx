@@ -50,12 +50,12 @@ const RESPONSES: Record<string, string[]> = {
     " ",
     "[PREVIOUS] Hike, Mphasis NEXT Labs, research-driven AI roles",
     "  - Voice agents, document AI, mobile IDP, and multimodal ML systems",
-    "  - See PDF mode for fuller resume detail"
+    "  - See the resume tab for fuller detail"
   ],
   education: [
     "B.Tech. in Data Science",
     "MPSTME, NMIMS | Mumbai | 2018 - 2022",
-    "Use the PDF tab for the complete formal resume."
+    "Use the resume tab for the complete formal resume."
   ],
   contact: [
     "EMAIL: paymanshus@gmail.com",
@@ -126,7 +126,7 @@ function keywordFallback(query: string): string[] {
     isAgentConfigured
       ? "[OFFLINE MODE] LLM unavailable and no keyword match found."
       : "[LOCAL MODE] No cached answer matched that question.",
-    "Try 'help' for structured commands, or the PDF tab for the full resume.",
+    "Try 'help' for structured commands, or the resume tab for the full resume.",
   ];
 }
 
@@ -371,14 +371,22 @@ export default function ChatResume() {
                   {input}
                   <span className="terminal-cursor ml-1 align-[-0.15em]" />
                 </div>
+                {/* 16px on touch screens: iOS zooms the page into any
+                    input smaller than that. The input is invisible, so
+                    only its size changes. No autofocus there either — it
+                    would throw the keyboard up as the page loads. */}
                 <input
                   ref={inputRef}
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  className="absolute inset-0 min-w-0 w-full bg-transparent border-none outline-none text-transparent caret-transparent"
-                  autoFocus
+                  className="absolute inset-0 min-w-0 w-full bg-transparent border-none outline-none text-transparent caret-transparent pointer-coarse:text-base"
+                  autoFocus={window.matchMedia('(pointer: fine)').matches}
+                  aria-label="Terminal input"
+                  enterKeyHint="send"
+                  autoCapitalize="off"
+                  autoCorrect="off"
                   spellCheck={false}
                   autoComplete="off"
                 />

@@ -223,9 +223,23 @@ class Particle {
 
 // ─── Web Audio amplitude analysis ────────────────────────────────────
 
-function useTrackAmplitude(mediaStreamTrack: MediaStreamTrack | undefined) {
+// 'spectrum' averages the byte spectrum — right for the agent's TTS track,
+// which is digitally silent between words. A live mic never is: room noise
+// sits around -80 dB, which the byte spectrum maps to a 0.15–0.25 floor, so
+// speech barely moved the field. 'level' reads time-domain RMS on a dB scale
+// instead: silence reads ~0, normal speech 0.4–0.8.
+type AmplitudeMode = 'spectrum' | 'level';
+
+const LEVEL_FLOOR_DB = -55;
+const LEVEL_RANGE_DB = 40;
+
+function useTrackAmplitude(
+  mediaStreamTrack: MediaStreamTrack | undefined,
+  mode: AmplitudeMode = 'spectrum'
+) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const waveRef = useRef<Float32Array<ArrayBuffer> | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
@@ -248,6 +262,7 @@ function useTrackAmplitude(mediaStreamTrack: MediaStreamTrack | undefined) {
 
     analyserRef.current = analyser;
     dataRef.current = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+    waveRef.current = new Float32Array(new ArrayBuffer(analyser.fftSize * 4));
 
     return () => {
       source.disconnect();
@@ -266,25 +281,44 @@ function useTrackAmplitude(mediaStreamTrack: MediaStreamTrack | undefined) {
     const analyser = analyserRef.current;
     const data = dataRef.current;
     if (!analyser || !data) return 0;
+    if (mode === 'level') {
+      const wave = waveRef.current;
+      if (!wave) return 0;
+      analyser.getFloatTimeDomainData(wave);
+      let sumSq = 0;
+      for (let i = 0; i < wave.length; i++) sumSq += wave[i] * wave[i];
+      const db = 10 * Math.log10(sumSq / wave.length + 1e-12);
+      return Math.min(1, Math.max(0, (db - LEVEL_FLOOR_DB) / LEVEL_RANGE_DB));
+    }
     analyser.getByteFrequencyData(data);
     let sum = 0;
     for (let i = 0; i < data.length; i++) sum += data[i];
     return sum / (data.length * 255);
-  }, []);
+  }, [mode]);
 
   return read;
 }
 
 // ─── Particle field canvas ───────────────────────────────────────────
 
+// Visitor speaking: thin dotted rings drawn in toward the core, like sound
+// being captured — the inward counterpart of the agent's outward burst. Only
+// spawned above the gate, so a silent mic leaves the field calm.
+const RING_GATE = 0.12;
+const RING_MAX_ALPHA = 0.55;
+
+type Ring = { r: number; start: number; alpha: number };
+
 function ParticleField({
   voiceState,
   readAgentAmplitude,
   readUserAmplitude,
+  className = 'relative w-full max-w-4xl h-[50vh]',
 }: {
   voiceState: VoiceState;
   readAgentAmplitude: () => number;
   readUserAmplitude: () => number;
+  className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -308,19 +342,29 @@ function ParticleField({
     let particles: Particle[] = [];
     const particleCount = 1800;
 
+    // Follows the container, not the window: in a live session the field is
+    // a flex child, and phones change its height on rotate and when the
+    // browser chrome collapses. Setting width/height clears the canvas, so
+    // only do it on a real change.
     const resizeCanvas = () => {
-      if (containerRef.current) {
-        canvas.width = containerRef.current.clientWidth;
-        canvas.height = containerRef.current.clientHeight;
+      const el = containerRef.current;
+      if (!el) return;
+      const { clientWidth: w, clientHeight: h } = el;
+      if (w && h && (w !== canvas.width || h !== canvas.height)) {
+        canvas.width = w;
+        canvas.height = h;
       }
     };
     resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+    const observer = new ResizeObserver(resizeCanvas);
+    if (containerRef.current) observer.observe(containerRef.current);
 
     for (let i = 0; i < particleCount; i++) {
       particles.push(new Particle(canvas));
     }
 
+    let rings: Ring[] = [];
+    let ringClock = 0;
     let smoothAmp = 0;
     // Crossfaded accent color so red↔green transitions are gradual
     const accent: RGB = [...ACCENTS.idle] as RGB;
@@ -361,6 +405,33 @@ function ParticleField({
         p.draw(ctx);
       });
 
+      if (state === 'user' && smoothAmp > RING_GATE) {
+        ringClock += smoothAmp * 0.06;
+        if (ringClock >= 1) {
+          ringClock = 0;
+          // Start outside the dense core, or the particles hide the ring
+          const start = Math.min(canvas.width, canvas.height) * 0.42 + 30 + smoothAmp * 30;
+          rings.push({ r: start, start, alpha: RING_MAX_ALPHA * Math.min(1, smoothAmp + 0.3) });
+        }
+      }
+      if (rings.length) {
+        ctx.save();
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 5]);
+        ctx.strokeStyle = `rgb(${r | 0}, ${g | 0}, ${b | 0})`;
+        for (const ring of rings) {
+          ring.r -= 1 + smoothAmp * 1.6;
+          // Fade in from the edge, out as it reaches the core
+          const t = ring.r / ring.start;
+          ctx.globalAlpha = ring.alpha * Math.min(1, (1 - t) * 4) * Math.min(1, t * 2);
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, Math.max(ring.r, 0), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+        rings = rings.filter((ring) => ring.r > 24);
+      }
+
       animationFrameId = requestAnimationFrame(animate);
     };
 
@@ -368,7 +439,7 @@ function ParticleField({
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', resizeCanvas);
+      observer.disconnect();
       particles = [];
     };
   }, []);
@@ -376,7 +447,7 @@ function ParticleField({
   return (
     <div
       ref={containerRef}
-      className="relative w-full max-w-4xl h-[50vh] flex items-center justify-center"
+      className={`${className} flex items-center justify-center`}
     >
       <canvas
         ref={canvasRef}
@@ -389,18 +460,23 @@ function ParticleField({
 
 // ─── Transcript ──────────────────────────────────────────────────────
 
-function TranscriptDisplay() {
+export type TranscriptTurn = { isUser: boolean; text: string; key: string };
+
+// Model control tokens (e.g. `<|end_markdown|>`) occasionally leak into the
+// agent's transcript stream. They are never meant to be read.
+const CONTROL_TOKEN = /<\|[^|<>]*\|>/g;
+
+function useTranscriptTurns(): TranscriptTurn[] {
   const transcriptions = useTranscriptions();
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   // STT streams arrive as many small segments. Rendering each as its own
   // line reads like choppy bullets — instead, coalesce consecutive segments
   // from the same speaker into one flowing utterance. A new visual line
   // starts only when the speaker changes (i.e. turn-taking), so chunk
   // boundaries are invisible to the reader.
-  const turns: { isUser: boolean; text: string; key: string }[] = [];
+  const turns: TranscriptTurn[] = [];
   for (const item of transcriptions) {
-    const text = item.text.trim();
+    const text = item.text.replace(CONTROL_TOKEN, '').trim();
     if (!text) continue;
     const isUser = item.participantInfo.identity.startsWith('visitor-');
     const last = turns[turns.length - 1];
@@ -410,7 +486,11 @@ function TranscriptDisplay() {
       turns.push({ isUser, text, key: item.streamInfo?.id ?? String(turns.length) });
     }
   }
+  return turns;
+}
 
+export function TranscriptView({ turns }: { turns: TranscriptTurn[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const totalChars = turns.reduce((n, t) => n + t.text.length, 0);
 
   useEffect(() => {
@@ -423,27 +503,80 @@ function TranscriptDisplay() {
     // Track content growth (interim segments update text without changing count)
   }, [totalChars]);
 
+  // Fixed height, so the field above keeps its size as the conversation
+  // grows; older lines scroll up and fade out under the top edge.
   return (
     <div
       ref={scrollRef}
-      className="mt-8 w-full max-w-2xl px-6 space-y-3 text-center z-10 max-h-[26vh] overflow-y-auto scrollbar-hide"
+      aria-live="polite"
+      className="relative z-10 w-full shrink-0 h-[clamp(7.5rem,26vh,13rem)] overflow-y-auto scrollbar-hide [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)]"
     >
-      {turns.map((turn) =>
-        turn.isUser ? (
-          <div key={turn.key} className="text-[#555555] text-sm md:text-base opacity-80">
-            ~ {turn.text}
-          </div>
-        ) : (
-          <div
-            key={turn.key}
-            className="text-white text-base md:text-lg font-medium leading-relaxed flex items-start justify-center gap-3"
-          >
-            <span className="text-brand-red mt-0.5">&gt;</span>
-            <span>{turn.text}</span>
-          </div>
-        )
-      )}
+      <div className="mx-auto flex max-w-2xl flex-col gap-3 px-5 pb-2 pt-6 text-center md:px-6">
+        {turns.map((turn) =>
+          turn.isUser ? (
+            <p key={turn.key} className="text-[#8a8a8a] text-sm md:text-base leading-relaxed">
+              <span className="text-[#5a5a5a]">~ </span>
+              {turn.text}
+            </p>
+          ) : (
+            <p
+              key={turn.key}
+              className="text-[#f5f5f5] text-[15px] md:text-lg font-medium leading-relaxed"
+            >
+              <span className="text-brand-red mr-2">&gt;</span>
+              {turn.text}
+            </p>
+          )
+        )}
+      </div>
     </div>
+  );
+}
+
+// Status dot that tracks the visitor's mic level while the agent listens, so
+// "it can hear me" is visible without staring at the field.
+function LevelDot({
+  state,
+  readUserAmplitude,
+}: {
+  state: string | undefined;
+  readUserAmplitude: () => number;
+}) {
+  const dotRef = useRef<HTMLSpanElement>(null);
+  const listening = state === 'listening';
+
+  useEffect(() => {
+    const dot = dotRef.current;
+    if (!dot || !listening) return;
+    let frame = 0;
+    let level = 0;
+    const tick = () => {
+      level = level * 0.75 + readUserAmplitude() * 0.25;
+      dot.style.transform = `scale(${1 + level * 0.7})`;
+      dot.style.boxShadow = `0 0 ${2 + level * 8}px rgba(255, 42, 42, ${0.15 + level * 0.45})`;
+      frame = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => {
+      cancelAnimationFrame(frame);
+      dot.style.transform = '';
+      dot.style.boxShadow = '';
+    };
+  }, [listening, readUserAmplitude]);
+
+  return (
+    <span
+      ref={dotRef}
+      className={`h-2 w-2 shrink-0 rounded-full ${
+        state === 'speaking'
+          ? 'bg-green-500 animate-pulse'
+          : listening
+            ? 'bg-brand-red'
+            : state === 'thinking'
+              ? 'bg-amber-400 animate-pulse'
+              : 'bg-[#444444]'
+      }`}
+    />
   );
 }
 
@@ -492,7 +625,7 @@ function ActiveVoiceSession({
     ?.mediaStreamTrack;
 
   const readAgentAmplitude = useTrackAmplitude(agentMediaTrack);
-  const readUserAmplitude = useTrackAmplitude(userMediaTrack);
+  const readUserAmplitude = useTrackAmplitude(userMediaTrack, 'level');
 
   const waitingForAgent =
     state === 'disconnected' || state === 'connecting' || state === undefined;
@@ -503,69 +636,106 @@ function ActiveVoiceSession({
     return () => clearTimeout(timer);
   }, [waitingForAgent, onAgentNoShow]);
 
+  const turns = useTranscriptTurns();
+
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-black relative overflow-hidden font-mono">
+    <SessionLayout
+      state={state}
+      voiceState={voiceState}
+      waitingForAgent={waitingForAgent}
+      thinkingWord={thinkingWord}
+      turns={turns}
+      fallbackTitle={showFallbackMark ? fallbackTitle : null}
+      degradedMessage={degradedMessage}
+      readAgentAmplitude={readAgentAmplitude}
+      readUserAmplitude={readUserAmplitude}
+      onDisconnect={onDisconnect}
+    />
+  );
+}
+
+// Layout of a live call, kept apart from the LiveKit hooks. Every row is in
+// normal flow — status, field, thinking line, transcript, disconnect — so
+// nothing can slide under anything else at any panel height.
+export function SessionLayout({
+  state,
+  voiceState,
+  waitingForAgent,
+  thinkingWord,
+  turns,
+  fallbackTitle,
+  degradedMessage,
+  readAgentAmplitude,
+  readUserAmplitude,
+  onDisconnect,
+}: {
+  state: string | undefined;
+  voiceState: VoiceState;
+  waitingForAgent: boolean;
+  thinkingWord: string;
+  turns: TranscriptTurn[];
+  fallbackTitle: string | null;
+  degradedMessage: string | null;
+  readAgentAmplitude: () => number;
+  readUserAmplitude: () => number;
+  onDisconnect: () => void;
+}) {
+  return (
+    <div className="w-full h-full flex flex-col items-center bg-black relative overflow-hidden font-mono">
+      <header className="z-20 flex w-full shrink-0 flex-col gap-3 px-4 pt-4 md:px-6 md:pt-6">
+        {/* Session state indicator */}
+        <div className="flex items-center gap-2.5">
+          <LevelDot state={state} readUserAmplitude={readUserAmplitude} />
+          <span className="text-[#8a8a8a] text-[11px] tracking-[0.2em] uppercase">
+            {waitingForAgent ? 'waiting for agent' : state}
+          </span>
+          {fallbackTitle && (
+            <span
+              className="inline-block h-1.5 w-1.5 bg-amber-400/70"
+              title={fallbackTitle}
+              aria-label={fallbackTitle}
+            />
+          )}
+        </div>
+
+        {/* TTS-down only — LLM fallback is the mark above, not a banner */}
+        {degradedMessage && (
+          <div className="self-center border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-center">
+            <span className="text-amber-400/90 text-[11px] tracking-[0.2em] uppercase">
+              {degradedMessage}
+            </span>
+          </div>
+        )}
+      </header>
+
       <ParticleField
         voiceState={voiceState}
         readAgentAmplitude={readAgentAmplitude}
         readUserAmplitude={readUserAmplitude}
+        className="relative w-full max-w-4xl flex-1 min-h-0 [mask-image:linear-gradient(to_bottom,transparent,black_10%,black_85%,transparent)]"
       />
 
-      {/* Session state indicator */}
-      <div className="absolute top-6 left-6 flex items-center gap-2">
-        <div
-          className={`w-2 h-2 rounded-full ${
-            state === 'speaking'
-              ? 'bg-green-500 animate-pulse'
-              : state === 'listening'
-                ? 'bg-brand-red animate-pulse'
-                : state === 'thinking'
-                  ? 'bg-amber-400 animate-pulse'
-                  : 'bg-[#444444]'
-          }`}
-        />
-        <span className="text-[#555555] text-[10px] tracking-[0.2em] uppercase">
-          {waitingForAgent ? 'waiting for agent' : state}
-        </span>
-        {showFallbackMark && (
-          <span
-            className="inline-block h-1.5 w-1.5 bg-amber-400/70"
-            title={fallbackTitle}
-            aria-label={fallbackTitle}
-          />
-        )}
-      </div>
-
-      {/* TTS-down only — LLM fallback is the mark above, not a banner */}
-      {degradedMessage && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 border border-amber-500/30 bg-amber-500/10 px-4 py-1.5">
-          <span className="text-amber-400/90 text-[10px] tracking-[0.2em] uppercase">
-            {degradedMessage}
-          </span>
-        </div>
-      )}
-
       {waitingForAgent ? (
-        <div className="mt-8 text-[#555555] text-xs tracking-[0.3em] uppercase animate-pulse z-10">
+        <div className="z-10 flex h-[clamp(7.5rem,26vh,13rem)] shrink-0 items-start pt-6 text-[#8a8a8a] text-xs tracking-[0.3em] uppercase animate-pulse">
           Summoning the agent...
         </div>
       ) : (
         <>
-          {state === 'thinking' && (
-            <div className="mt-2 text-amber-400/70 text-xs tracking-[0.25em] uppercase animate-pulse z-10">
-              {thinkingWord}…
-            </div>
-          )}
-          <TranscriptDisplay />
+          {/* Reserved line, so the transcript doesn't jump when it appears */}
+          <div className="z-10 h-5 shrink-0 text-amber-400/80 text-xs tracking-[0.25em] uppercase animate-pulse">
+            {state === 'thinking' ? `${thinkingWord}…` : null}
+          </div>
+          <TranscriptView turns={turns} />
         </>
       )}
 
-      <footer className="absolute bottom-8 w-full flex justify-center">
+      <footer className="z-20 flex w-full shrink-0 justify-center bg-black pb-3 pt-2 md:pb-5">
         <button
           onClick={onDisconnect}
-          className="text-[#555555] text-[10px] tracking-[0.2em] uppercase hover:text-brand-red/70 transition-colors cursor-pointer"
+          className="px-4 py-2.5 text-[#8a8a8a] text-[11px] tracking-[0.2em] uppercase hover:text-brand-red transition-colors cursor-pointer"
         >
-          [ ESC TO DISCONNECT ]
+          <span className="pointer-coarse:hidden">[ Esc to disconnect ]</span>
+          <span className="hidden pointer-coarse:inline">[ End call ]</span>
         </button>
       </footer>
     </div>
@@ -606,9 +776,11 @@ function IdleView({ onStart }: { onStart: () => void }) {
             />
           </svg>
         </div>
+        {/* Solid-ish fill and a black halo on the caption keep both readable
+            over the particles drifting behind them. */}
         <button
           onClick={onStart}
-          className="group relative overflow-hidden border border-[#1F1F1F] px-8 py-4 font-mono text-sm uppercase tracking-widest transition-colors duration-300 hover:border-brand-red/50 text-white cursor-pointer"
+          className="group relative overflow-hidden border border-[#2a2a2a] bg-black/75 px-8 py-4 font-mono text-sm uppercase tracking-widest transition-colors duration-300 hover:border-brand-red/50 text-white cursor-pointer"
         >
           <div className="absolute inset-0 translate-y-full bg-brand-red/10 transition-transform duration-300 ease-out group-hover:translate-y-0" />
           <span className="relative z-10 flex items-center gap-3">
@@ -616,7 +788,7 @@ function IdleView({ onStart }: { onStart: () => void }) {
             Start Voice
           </span>
         </button>
-        <p className="mt-6 text-[#555555] text-[10px] tracking-[0.2em] uppercase">
+        <p className="mt-6 px-4 text-[#9a9a9a] text-[11px] tracking-[0.2em] uppercase [text-shadow:0_0_6px_#000,0_0_12px_#000]">
           Talk to an AI version of Paymanshu
         </p>
       </div>
@@ -678,7 +850,7 @@ function MicPermissionModal({
             strokeLinejoin="round"
           />
         </svg>
-        <span className="text-brand-red/70 text-[10px] tracking-widest uppercase mt-1 block text-center">
+        <span className="text-brand-red/80 text-[11px] tracking-widest uppercase mt-1 block text-center">
           Allow here
         </span>
       </div>
@@ -725,7 +897,7 @@ function MicPermissionModal({
         </div>
       </div>
 
-      <p className="absolute bottom-8 text-[#555555] text-[10px] tracking-[0.2em] uppercase">
+      <p className="absolute bottom-8 text-[#8a8a8a] text-[11px] tracking-[0.2em] uppercase">
         Voice powered by LiveKit WebRTC
       </p>
     </div>
@@ -781,17 +953,17 @@ function RestingView({ onRetry }: { onRetry?: () => void }) {
         <p className="text-[#8FA8C0] text-sm tracking-[0.2em] uppercase mb-3">
           Agent Resting
         </p>
-        <p className="text-[#555555] text-xs max-w-xs mx-auto leading-relaxed">
+        <p className="text-[#8a8a8a] text-xs max-w-xs mx-auto leading-relaxed">
           The live voice agent is off duty right now — come back later!
         </p>
-        <p className="mt-6 text-[#444444] text-[10px] tracking-[0.2em] uppercase">
-          Try the chat or PDF tab meanwhile
+        <p className="mt-6 text-[#777777] text-[11px] tracking-[0.2em] uppercase">
+          Try the chat or resume tab meanwhile
         </p>
 
         {onRetry && (
           <button
             onClick={onRetry}
-            className="mt-8 border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-[#666666] hover:text-[#8FA8C0] hover:border-[#3A4A5C]/50 transition-colors cursor-pointer"
+            className="mt-8 border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-[#8a8a8a] hover:text-[#8FA8C0] hover:border-[#3A4A5C]/50 transition-colors cursor-pointer"
           >
             Check Again
           </button>
@@ -876,7 +1048,7 @@ function WaitlistForm({ reason }: { reason: VoiceUnavailableReason }) {
 
   return (
     <form onSubmit={submit} className="mt-6 flex flex-col items-center gap-2">
-      <p className="text-[#555555] text-[10px] tracking-[0.2em] uppercase">
+      <p className="text-[#8a8a8a] text-[11px] tracking-[0.2em] uppercase">
         Or get an email when I&apos;m back
       </p>
       <div className="flex w-full max-w-xs border border-[#1F1F1F] focus-within:border-[#3A4A5C]/60">
@@ -890,17 +1062,17 @@ function WaitlistForm({ reason }: { reason: VoiceUnavailableReason }) {
           }}
           placeholder="you@somewhere.com"
           aria-label="Email address"
-          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-xs text-white placeholder:text-[#444444] outline-none"
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-base md:text-xs text-white placeholder:text-[#555555] outline-none"
         />
         <button
           type="submit"
           disabled={phase === 'sending'}
-          className="px-4 text-[10px] uppercase tracking-widest text-[#8FA8C0] hover:text-white disabled:opacity-50 cursor-pointer"
+          className="px-4 text-[11px] uppercase tracking-widest text-[#8FA8C0] hover:text-white disabled:opacity-50 cursor-pointer"
         >
           {phase === 'sending' ? '...' : 'Notify me'}
         </button>
       </div>
-      <p className="text-[#444444] text-[10px] max-w-xs leading-relaxed">
+      <p className="text-[#777777] text-[11px] max-w-xs leading-relaxed">
         {phase === 'invalid'
           ? "That doesn't look like an email."
           : phase === 'error'
@@ -954,7 +1126,7 @@ function UnavailableView({
           {copy.canRetry && (
             <button
               onClick={onRetry}
-              className="border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-[#666666] hover:text-[#8FA8C0] hover:border-[#3A4A5C]/50 transition-colors cursor-pointer"
+              className="border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-[#8a8a8a] hover:text-[#8FA8C0] hover:border-[#3A4A5C]/50 transition-colors cursor-pointer"
             >
               Try again
             </button>
@@ -971,7 +1143,7 @@ function ErrorView({ message, onRetry }: { message: string; onRetry: () => void 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-black font-mono text-center px-6">
       <p className="text-brand-red text-sm mb-4">Connection Error</p>
-      <p className="text-[#555555] text-xs mb-6 max-w-sm">{message}</p>
+      <p className="text-[#8a8a8a] text-xs mb-6 max-w-sm">{message}</p>
       <button
         onClick={onRetry}
         className="border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-[#888888] hover:text-white hover:border-brand-red/30 transition-colors cursor-pointer"
