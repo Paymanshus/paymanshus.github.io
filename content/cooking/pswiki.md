@@ -11,5 +11,5 @@ Messy notes and Obsidian vaults go in. An LLM pipeline summarizes, cross-referen
 clusters them into interlinked Markdown pages, browsable in a small React reader with a
 force-directed knowledge graph and a Q&A layer that answers from the compiled pages.
 
-Still at the skeleton stage: repo structure and schema conventions are in place, and the
+It's still a skeleton. The repo structure and schema conventions are in place, and the
 compiler is next.

@@ -9,9 +9,6 @@ export default function CookingSection({ projects }: { projects: Project[] }) {
       <header className="mb-12 md:mb-16">
         <h1 className="mb-2 text-4xl font-light tracking-tight">What&apos;s cooking</h1>
         <p className="font-mono text-xs uppercase tracking-widest text-brand-red">{'// On the stove right now'}</p>
-        <p className="mt-6 max-w-2xl font-serif text-xl italic leading-relaxed text-text-secondary">
-          Side projects in progress. Open one for the full story.
-        </p>
       </header>
 
       {projects.length === 0 ? (

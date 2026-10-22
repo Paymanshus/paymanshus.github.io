@@ -11,6 +11,6 @@ You type or tap, and the phone speaks in your own cloned voice. A quick bar hold
 phrases, suggestions complete from your own history, and any utterance can go out as a WhatsApp
 voice note.
 
-Speech never fails. Every request walks a fallback chain: a local cache answers in under 300ms,
-then Cartesia, then ElevenLabs, then the phone's built-in voice, all silently and with no error
-dialogs.
+Every request walks a fallback chain so the phone always says something: a local cache answers
+in under 300ms, then Cartesia, then ElevenLabs, then the phone's built-in voice. The switch is
+silent, with no error dialogs.

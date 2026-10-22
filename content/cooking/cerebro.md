@@ -23,5 +23,5 @@ opinions from Reddit, Hacker News, forums and the open web, clusters them into p
 an LLM, then scores everything with deterministic, zero-LLM math.
 
 Every number traces back to weighted claims with a source link, so excluding a source or
-re-weighting one recomputes instantly with no model call. The LLM-written summary sits on top,
-labelled as synthesized, and is never allowed to outrank the counts underneath it.
+re-weighting one recomputes instantly with no model call. An LLM writes a summary on top,
+labelled as synthesized, and it never outranks the counts underneath.
