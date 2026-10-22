@@ -17,6 +17,7 @@ const profiles = [
 
 const internalLinks = [
   { href: '/experience', label: 'Experience' },
+  { href: '/cooking', label: "What's cooking" },
   { href: '/thoughts', label: 'Thoughts' },
 ] as const;
 

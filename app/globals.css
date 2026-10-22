@@ -233,3 +233,13 @@
   color: rgb(245 245 245 / 0.75);
   font-style: italic;
 }
+
+/* Project writeups on /cooking reuse the article reading styles above; these
+   add framed images so screenshots and figures can sit between paragraphs. */
+.cooking-writeup img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}

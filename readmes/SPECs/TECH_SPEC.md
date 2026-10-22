@@ -10,10 +10,11 @@ Current public routes:
 
 - `/`: fullscreen landing / hero
 - `/experience/`: resume surface with `pdf`, `chat`, and `voice` modes
+- `/cooking/`: "what's cooking", a single scrolling page of side projects in progress
 - `/thoughts/`: blog index
 - `/thoughts/[slug]/`: static article pages generated from local Markdown
 
-The home route is a no-scroll hero state. The experience and thoughts routes are normal scroll pages inside the shared site shell.
+The home route is a no-scroll hero state. The experience, cooking and thoughts routes are normal scroll pages inside the shared site shell.
 
 ## Stack
 
@@ -98,6 +99,50 @@ The home route is a no-scroll hero state. The experience and thoughts routes are
 - `components/ReadingProgressBar.tsx`
   Client-side top progress bar using `useScroll()`.
 
+### Cooking route ("what's cooking")
+
+- `app/cooking/page.tsx`
+  Static route with `CollectionPage` structured data; each project is a
+  `CreativeWork` list item whose URL is the page plus `#<slug>`.
+- `components/cooking/CookingSection.tsx`
+  Server component: page header and the gallery.
+- `components/cooking/CookingGallery.tsx`
+  Client. Card grid (1 / 2 / 3 columns at base / `sm` / `xl`) plus the open
+  detail view. The open project lives in the URL hash: opening `pushState`s
+  `#<slug>`, closing pops it, so `/cooking/#cerebro` deep-links and the back
+  button closes the modal. `MotionConfig reducedMotion="user"` turns transforms
+  off for reduced-motion users.
+- `components/cooking/ProjectCard.tsx`
+  The "magnet" card. Pointer position (-0.5..0.5) drives sprung `rotateX` /
+  `rotateY` (max 9°) so the part under the pointer rises toward the viewer and
+  the opposite edge dips. Signs are flipped from CSS defaults because
+  `rotateX(+)` pushes the top edge away. A shadow shifts away from the lifted
+  side. Two grid layers: grey 24px lines at rest, and a red copy masked to a
+  200px radial around the pointer that fades in on hover and also crosses the
+  thumbnail. Touch uses the same pointer events (pointerdown engages, pointerup
+  or pointercancel releases). The whole card opens the modal through a
+  stretched `<button>`; links sit above it at `z-10`.
+- `components/cooking/ProjectModal.tsx`
+  The detail view. It shares `layoutId="cooking-card-<slug>"` with its card, so
+  the card morphs into the panel. The image also shares a layoutId when the
+  hero is the thumbnail. The panel is about 88dvh tall and max 6xl wide on
+  desktop, and almost full screen on phones (`100dvh - 1rem`). It has a mono
+  path header (`> ~/cooking/<slug>`, `[ esc ] close`), corner ticks and one red
+  scan line on open. Inside: hero, then the writeup (`.thought-post-content
+  .cooking-writeup`) beside a sticky fact column (status, date, stack, links),
+  then the screenshot gallery. Escape, the backdrop and the close button all
+  close it. Body scroll is locked while it is open, and focus returns to the
+  card on close.
+- `components/cooking/ScreenGallery.tsx`
+  A fixed 16:10 letterboxed stage, `<` `>` buttons, arrow keys, the caption
+  (the image alt) with an `NN / NN` counter, and a thumbnail row. It is not a
+  native horizontal scroller.
+- `components/cooking/shared.tsx`
+  Status tag, links (`> live`, `> source` plus a GitHub mark), meta text style.
+- Analytics: dwell as `cooking_index`, plus `cooking_open {project}` per detail view.
+- Nav label is `what's cooking` from `sm` up and `cooking` below it, with nav
+  tracking tightened under `sm` so four items fit at 375px.
+
 ## Content System
 
 Blog content lives in `content/blog/`.
@@ -140,6 +185,34 @@ carry `published: false`, so they are excluded from the index, from
 `getAllBlogSlugs()`, and return 404 on direct access.
 
 Blog content is covered by `tests/blog/blog-content.test.mjs`.
+
+### Cooking projects
+
+Project entries live in `content/cooking/*.md` and load through
+`lib/cooking.ts`. **Order and visibility come from `content/cooking/_order.txt`**:
+one slug per line, top first. Moving a line reorders, a `#` in front hides the
+project, and an unlisted file stays hidden (the build warns and names it).
+Listing a slug with no file fails the build. `_template.md` documents every
+field. Files starting `_` are never projects.
+
+The body is the long-form writeup (minutes, not a blurb), rendered with
+`remark + gfm + html` and `sanitize: false` so it can embed images and inline
+SVG figures, like blog posts.
+
+Frontmatter: `title`, `summary` (card line), `date` (last meaningful update),
+`status` (`building` | `early`; `shipped` is commented out in `PROJECT_STATUSES`
+until something ships), `stack` (list), optional `repo` (omit for private
+repos, and "private repo" is shown instead), optional `live`, optional
+`thumbnail` (card), optional `hero` (detail-view top, defaults to the
+thumbnail), and optional `media` (gallery). Every image is
+`{src, alt, width, height}`, and a missing field fails the build.
+
+Media lives in `public/cooking/<slug>/` as WebP. Convert source images with
+`node scripts/optimize-cooking-media.mjs <in> <out.webp> [maxW] [maxH]`. It
+prints the final pixel size to copy into frontmatter. It is not part of the
+build. For projects with no UI to screenshot, the thumbnail is a graphic made
+with the `ps-redblack-visuals` skill (CereBro's is the first), rendered to PNG
+and then converted with the same script.
 
 ## Typography Implementation
 

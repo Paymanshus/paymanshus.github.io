@@ -4,10 +4,11 @@
 
 ## Current Design Frame
 
-The site is an austere dark portfolio with red used as a precision signal, not a wash. It is route-based rather than tabbed, but the three primary sections remain the same:
+The site is an austere dark portfolio with red used as a precision signal, not a wash. It is route-based rather than tabbed, with four primary sections:
 
 - `hi`
 - `experience`
+- `what's cooking`
 - `thoughts`
 
 The visual mood is still "Austere Neon", but the implementation has settled into something calmer and more editorial than the early stitch explorations.
@@ -95,7 +96,8 @@ Do not use: Inter, Plus Jakarta Sans, Outfit, DM Sans, Manrope, Figtree, Sora, P
 Current shipped behavior:
 
 - Left: `PS`
-- Right: `hi`, `experience`, `thoughts`
+- Right: `hi`, `experience`, `what's cooking`, `thoughts`
+- Below `sm` (phones) the third item reads `cooking` and nav tracking drops from `0.28em` to `0.16em`, so all four fit inside the 24px gutters at 375px
 - Active route: thin red underline with motion layout transition
 
 Nav should stay light and structural. It is not meant to become a thick masthead.
@@ -213,6 +215,35 @@ Current list design:
 
 The list should read as a writing archive, not as card-heavy marketing content.
 
+## What's Cooking
+
+A grid of project cards; each card opens into a large detail view that carries the long-form writeup. It is mobile-first, so every decision was checked at 375px before desktop.
+
+### Page and cards
+
+- Header matches Experience: light `text-4xl` title, red mono `// ON THE STOVE RIGHT NOW` eyebrow, then a serif italic intro line
+- Grid: 1 column on phones, 2 from `sm`, 3 from `xl`
+- Card: square-cornered, hairline frame on `surface`, 16:9 thumbnail, then a mono meta row (`01`, status, date on the right), a light sans title, a 3-line summary, and the links row (`> live`, `> source` plus a GitHub mark) with `[ OPEN ]` on the right
+- **Magnet tilt.** The pointer is a magnet and the card a weighted metal plate: the part under the pointer lifts toward the viewer and the opposite edge dips (max 9°, sprung, slight 1.025 scale). The shadow falls away from the lifted side. On touch it follows the finger and settles back on release
+- **Lit grid.** A faint grey 24px grid sits behind the card text. On hover the same grid lights soft red in a ~200px circle around the pointer, crossing the thumbnail too, with a very low red wash. It echoes the home horizon grid at a whisper
+- Red on a resting card: only the 6px square before `BUILDING`. Hover adds the lit grid and a red title, both transient
+- Missing visuals get a placeholder frame, not stock imagery: `[ VISUAL PENDING ]` top-left and the project name in `#2e2e2e` bottom-left
+
+### Detail view (modal)
+
+- Opens by morphing the card itself (shared layout) into a large panel, so the card reads as lifting off the grid toward the viewer. Its contents then rise in with a short stagger
+- Sizing: on laptops about 88dvh tall and up to `max-w-6xl`; on phones almost full screen. The panel scrolls inside itself while the page behind is locked
+- "Hackerman" kept clean: a mono header path `> ~/cooking/<slug>` (red chevron), `[ ESC ] CLOSE`, grey L-shaped corner ticks like a viewfinder, and a single red scan line that sweeps once on open. Nothing loops
+- Body: hero image, then the writeup set in the blog's reading styles (Lora, `.thought-post-content`) in 8 of 12 columns, beside a sticky fact column of hairline-ruled blocks (status, last touched, stack as square mono chips, links)
+- Screens: a fixed 16:10 letterboxed stage with square `<` `>` buttons, the caption plus an `NN / NN` counter, and a thumbnail row where the selected thumbnail has a red frame. Native horizontal scrollers are not used anywhere on this page
+- Ends with `// END OF FILE`
+
+### Visuals for projects with no UI
+
+Made with the `ps-redblack-visuals` skill at site fidelity: black ground, structural greys, one red idea. CereBro's traces a single r/nvidia opinion in red through a field of 41 into a 23-pro / 18-con ledger, and stays as its detail-view hero after real screenshots arrive. Keep graphic text at 30px or more on the 1200×675 canvas so it stays legible at phone card width.
+
+No demo videos or motion graphics yet; they are a later pass.
+
 ## Thought Reading View
 
 ### Current reading model
@@ -252,6 +283,7 @@ Public IA currently consists of:
 
 - home hero
 - experience route
+- what's cooking route
 - thoughts index
 - thought detail routes
 - downloadable/openable PDF asset

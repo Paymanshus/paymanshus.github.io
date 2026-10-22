@@ -8,6 +8,7 @@ This site is the personal portfolio of Paymanshu Sharma. It includes an interact
 
 - [Home](https://paymanshus.github.io/): landing page with a short intro and links into the resume and blog.
 - [Experience](https://paymanshus.github.io/experience/): interactive resume with three modes — PDF, terminal chat, and a live LiveKit voice agent.
+- [What's cooking](https://paymanshus.github.io/cooking/): side projects in progress, including CereBro (auditable opinion mining), Second Voice (a cloned-voice speech app), WrappedApp (local-first WhatsApp chat analytics), WatchlistXplore and PS-LLMWiki.
 - [Thoughts](https://paymanshus.github.io/thoughts/): blog index covering design, AI, and frontend engineering.
 - [Large Language Model Optimization: Memory, GPU, and CPU](https://paymanshus.github.io/thoughts/llm-optimization-memory-gpu-cpu/): practical LLM deployment notes on precision, quantization, GPU batching/KV cache, and CPU inference.
 - [On-Device Large Language Models on Android](https://paymanshus.github.io/thoughts/on-device-llms-on-android/): why on-device LLMs matter, with Android demos using Phi-3-mini and Gemma 2B.

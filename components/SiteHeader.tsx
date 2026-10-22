@@ -8,12 +8,18 @@ import { Terminal } from 'lucide-react';
 const navItems = [
   { href: '/', label: 'hi', key: 'hi' },
   { href: '/experience', label: 'experience', key: 'experience' },
+  // Full label doesn't fit beside the others on a phone; shortLabel shows below sm.
+  { href: '/cooking', label: "what's cooking", shortLabel: 'cooking', key: 'cooking' },
   { href: '/thoughts', label: 'thoughts', key: 'thoughts' },
 ] as const;
 
 function getActiveKey(pathname: string) {
   if (pathname.startsWith('/thoughts')) {
     return 'thoughts';
+  }
+
+  if (pathname.startsWith('/cooking')) {
+    return 'cooking';
   }
 
   if (pathname.startsWith('/experience')) {
@@ -41,7 +47,7 @@ export default function SiteHeader() {
         </motion.span>
       </Link>
 
-      <div className="flex items-center gap-5 font-mono text-xs tracking-[0.28em] text-text-secondary md:gap-8 md:text-sm">
+      <div className="flex items-center gap-4 font-mono text-xs tracking-[0.16em] text-text-secondary sm:gap-5 sm:tracking-[0.28em] md:gap-8 md:text-sm">
         {navItems.map((item) => {
           const isActive = activeKey === item.key;
 
@@ -53,7 +59,14 @@ export default function SiteHeader() {
               className={`relative py-2 transition-colors duration-300 ${isActive ? 'text-text-primary' : 'hover:text-text-primary'
                 }`}
             >
-              {item.label}
+              {'shortLabel' in item ? (
+                <>
+                  <span className="sm:hidden">{item.shortLabel}</span>
+                  <span className="hidden sm:inline">{item.label}</span>
+                </>
+              ) : (
+                item.label
+              )}
               {isActive ? (
                 <motion.span
                   layoutId="nav-indicator"
