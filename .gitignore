@@ -61,8 +61,8 @@ left.md
 promptlatest.md
 status.md
 
-# Machine-local assistant config (Windows paths, permission allowlists)
-CLAUDE.md
+# Machine-local assistant config (Windows paths, permission allowlists).
+# CLAUDE.md is tracked: it holds the owner's working rules for every session.
 .claude/
 GEMINI.md
 
