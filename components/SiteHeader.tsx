@@ -47,7 +47,9 @@ export default function SiteHeader() {
         </motion.span>
       </Link>
 
-      <div className="flex items-center gap-4 font-mono text-xs tracking-[0.16em] text-text-secondary sm:gap-5 sm:tracking-[0.28em] md:gap-8 md:text-sm">
+      {/* Tighter still under 360px (iPhone SE, small Androids), where the
+          four labels otherwise push the page sideways. */}
+      <div className="flex items-center gap-4 font-mono text-xs tracking-[0.16em] text-text-secondary max-[359px]:gap-2.5 max-[359px]:text-[11px] max-[359px]:tracking-[0.06em] sm:gap-5 sm:tracking-[0.28em] md:gap-8 md:text-sm">
         {navItems.map((item) => {
           const isActive = activeKey === item.key;
 

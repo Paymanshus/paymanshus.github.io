@@ -151,18 +151,19 @@ The home route should feel atmospheric but still disciplined enough that the typ
 
 ### Current structure
 
-- Pill toggle for `pdf`, `chat`, `voice`
+- Pill toggle for `resume`, `chat`, `voice` (full width with equal segments on phones; icons drop under 360px)
 - Default mode on route entry: `chat`
-- Shared framed panel below the toggle
+- Shared framed panel below the toggle; on phones, picking a mode scrolls the whole panel into view
+- Panel height is `80svh`, not `vh`, so it fits inside a phone screen with the browser bars showing
 
-### PDF mode
+### Resume mode
 
-- Dark embedded PDF viewer
-- Red outlined "Open PDF" action in the top-right — opens in a new tab as a PDF-only view, not a browser download
-- The PDF must be accessible at a standalone URL (e.g. `paymanshus.github.io/assets/Paymanshu_Sharma_Resume.pdf`) so it can be shared directly with recruiters without exposing the full site
-- Loading is deferred by one animation frame so route transition remains smooth
-- The iframe is **never** `loading="lazy"`: the viewer sits below the fold, so a lazy iframe stayed unloaded and the tab read as a blank panel until the visitor happened to scroll
-- A fallback layer sits permanently behind the iframe — "Inline preview unavailable" plus a red-outlined "Open the resume PDF" action. Mobile Safari and Chrome commonly refuse to render PDFs inline, leaving the frame empty; this guarantees a working route to the resume on every device
+- The owner's HTML resume (`public/assets/Paymanshu_Sharma_Resume.html`, his own export) in a same-origin iframe sized to its content, so it scrolls with the page instead of as a box inside the panel
+- The file is dropped in unchanged; screen-only CSS is injected on load: transparent paper so it sits flush on the panel, 1.12× on wide screens, and reflow on phones (rows wrap, contact separators can break)
+- Links inside it open in a new tab (web) or at the top level (mail/phone), never inside the frame
+- Red outlined "Get the PDF" action above it, lined up with the resume's own margins — opens the PDF in a new tab, not a download
+- The PDF stays at its standalone URL (`paymanshus.github.io/assets/Paymanshu_Sharma_Resume.pdf`) so it can be shared with recruiters and on profiles without exposing the full site
+- The iframe is **never** `loading="lazy"`: the panel sits below the fold, and a lazy iframe stayed blank until the visitor happened to scroll
 
 ### Chat mode
 
@@ -178,6 +179,7 @@ The home route should feel atmospheric but still disciplined enough that the typ
 - `PROCESSING QUERY` pulse line while awaiting the LLM
 - Blinking red cursor follows typed text
 - Up/Down arrows recall previously submitted commands (shell-style history buffer; consecutive duplicates skipped)
+- Touch screens: no autofocus (it would raise the keyboard on page load), and the hidden input is 16px so iOS doesn't zoom the page on focus
 - Plain text responses only — no GUI elements, no cards, no markdown rendering, no icons
 
 The chat should feel like Claude Code, Gemini CLI, or a modern TUI program — not a chatbot widget.
@@ -190,7 +192,7 @@ Now a live LiveKit WebRTC session, no longer a scripted demo.
 - Pre-connection idle view now renders the same particle field behind the START VOICE button in its quiet `idle` state (gentle drift, low-intensity red center), with a single pulsing red dot at the core — "a still surface just before something breaks through it". The field is `pointer-events-none` so it never intercepts the button; amplitude readers are inert (idle drift samples no audio)
 - Black canvas field with dense structured particles (squares, crosses, pixels — not organic blobs)
 - Audio-reactive states, driven by real amplitude from Web Audio `AnalyserNode`:
-  - **User speaking (recording)**: inward contraction, **red** accent at center — red = recording, on-theme with the site
+  - **User speaking (recording)**: inward contraction, **red** accent at center — red = recording, on-theme with the site. While the mic level is up, thin dotted red rings fall in toward the core (the inward counterpart of the agent's burst), and the status dot swells with the level. The mic is read as RMS on a dB scale so a quiet room reads as zero and speech clearly moves the field
   - **Agent speaking (responding)**: outward expansion proportional to TTS amplitude, **green** accent at center
   - **Thinking**: slow inward spiral, dim amber accent
   - **Idle**: gentle drift, low-intensity red center
@@ -199,10 +201,12 @@ Now a live LiveKit WebRTC session, no longer a scripted demo.
 - While thinking: a rotating quirky-but-not-cartoony verb ("Rummaging…",
   "Cross-referencing…", "Jogging my memory…") pulses under the field —
   Claude Code register, one word picked per thinking episode
-- Live rolling monospace transcript below the field: agent lines with red `>` prefix, user lines quieter with `~` prefix. Consecutive STT chunks from one speaker merge into a single flowing line — never bullet-like fragments; a new line starts only on turn change
+- Live rolling monospace transcript below the field: agent lines `#f5f5f5` with red `>` prefix, user lines `#8a8a8a` with `~` prefix. Consecutive STT chunks from one speaker merge into a single flowing line — never bullet-like fragments; a new line starts only on turn change. Model control tokens (`<|…|>`) are stripped
+- The live call is one column in normal flow: status row, field (takes the remaining height), reserved thinking line, transcript (fixed height, older lines fade out at the top), disconnect. Nothing is absolutely positioned over anything else, so text can never cover the disconnect control
+- No text in the voice views is smaller than 11px or dimmer than `#777`
 - TTS down is the one remaining banner: "voice output unavailable — provider limits hit. try the chat tab"
 - The mic-permission modal appears only on the first ever connect on a device; afterwards Start Voice connects directly
-- `[ ESC TO DISCONNECT ]` anchored at the bottom — both the key and the label work
+- `[ ESC TO DISCONNECT ]` in its own row at the bottom — both the key and the label work. Touch screens show `[ END CALL ]` instead
 
 ## Thoughts Index
 

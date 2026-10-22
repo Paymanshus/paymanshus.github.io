@@ -197,16 +197,48 @@ test('resting has its own particle accent, distinct from the live red', () => {
   assert.match(VOICE_SRC, /state === 'resting'/, 'resting needs its own motion');
 });
 
-// ─── PDF viewer has a visible fallback ────────────────────────────────
+// ─── Resume tab ───────────────────────────────────────────────────────
 
-test('the PDF tab always shows an escape hatch, not a blank frame', () => {
-  const pdf = read('components', 'resume', 'PdfResume.tsx');
+test('the resume tab embeds the HTML resume and links the shareable PDF', () => {
+  const resume = read('components', 'resume', 'HtmlResume.tsx');
   assert.ok(
-    !/loading="lazy"/.test(pdf),
-    'the PDF iframe must not lazy-load: it sits below the fold and stayed blank'
+    !/loading="lazy"/.test(resume),
+    'the resume iframe must not lazy-load: it sits below the fold and stayed blank'
   );
-  assert.match(pdf, /Inline preview unavailable/);
-  assert.match(pdf, /Open the resume PDF/);
+  // This exact URL is shared with recruiters and on profiles.
+  assert.match(resume, /'\/assets\/Paymanshu_Sharma_Resume\.pdf'/);
+  assert.match(resume, /Get the PDF/);
+  for (const file of ['Paymanshu_Sharma_Resume.pdf', 'Paymanshu_Sharma_Resume.html']) {
+    assert.ok(fs.existsSync(path.join(ROOT, 'public', 'assets', file)), `missing ${file}`);
+  }
+});
+
+// ─── Live voice session layout ────────────────────────────────────────
+
+test('the disconnect control is in flow, so the transcript cannot cover it', () => {
+  const layout = VOICE_SRC.slice(
+    VOICE_SRC.indexOf('export function SessionLayout'),
+    VOICE_SRC.indexOf('// ─── Pre-connection views')
+  );
+  assert.match(layout, /<footer className="[^"]*shrink-0/);
+  assert.ok(!/<footer className="[^"]*absolute/.test(layout), 'footer must not be absolutely positioned');
+  // Touch screens have no Esc key
+  assert.match(layout, /End call/);
+});
+
+test('model control tokens never reach the transcript', () => {
+  const match = VOICE_SRC.match(/const CONTROL_TOKEN = (\/.*\/g);/);
+  assert.ok(match, 'CONTROL_TOKEN regex missing');
+  const re = new Function(`return ${match[1]}`)();
+  assert.equal(
+    "<|end_markdown|>You're right, my mistake.".replace(re, ''),
+    "You're right, my mistake."
+  );
+  assert.match(VOICE_SRC, /\.replace\(CONTROL_TOKEN, ''\)/);
+});
+
+test('the mic is read as a level, so silence does not look like speech', () => {
+  assert.match(VOICE_SRC, /useTrackAmplitude\(userMediaTrack, 'level'\)/);
 });
 
 test('a refused token shows the unavailable view, not an error', () => {
