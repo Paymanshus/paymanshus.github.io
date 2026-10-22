@@ -9,10 +9,13 @@ VAD: Silero (local)
 Turn detection: LiveKit Multilingual Model locally; Silero VAD on Railway unless VOICE_TURN_DETECTOR=true
 
 Latency design (see readmes/SPECs/TECH_SPEC.md):
-- No LLM tool round-trip: resume context is injected per-turn via
-  on_user_turn_completed (BM25 top-2; full resume below confidence threshold)
-- preemptive_generation=True: LLM+TTS start on interim transcript while
-  endpointing is still deciding the turn is over
+- No LLM tool round-trip: resume context is injected per LLM call in
+  PaymanshuAgent.llm_node (BM25 top-2; full resume below confidence threshold),
+  on a copy of the chat context so preemptive generation stays valid
+- preemptive_generation=True: the LLM starts on the interim transcript while
+  endpointing (dynamic, 0.4-2.5 s) is still deciding the turn is over
+- Fixed lines (greeting, goodbyes) play from cached audio; word fixes for STT
+  and TTS live in voice_lexicon.py
 - Short spoken answers enforced by persona + max_output_tokens cap
 
 Usage:
@@ -46,6 +49,7 @@ import llm_models
 import llm_voice
 import voice_availability
 import voice_greeting
+import voice_lexicon
 from prompts import (
     VOICE_PERSONA_INSTRUCTIONS,
     VOICE_GREETINGS,
@@ -107,8 +111,15 @@ else:
 
 
 def _turn_handling() -> TurnHandlingOptions:
+    # "dynamic" adapts the wait to each caller's own pause pattern between the
+    # min and max: quick talkers get answered sooner, people who pause mid-
+    # thought get a little more room. min stays at the 0.4 s that felt right on
+    # live calls; max comes down from 3.0 s so an unsure turn detector can't
+    # leave anyone hanging for 3 s. See readmes/perf/2026-10-22/tests/13-*.md.
     endpointing = {
+        "mode": os.environ.get("ENDPOINTING_MODE", "dynamic"),
         "min_delay": float(os.environ.get("MIN_ENDPOINTING_DELAY", "0.4")),
+        "max_delay": float(os.environ.get("MAX_ENDPOINTING_DELAY", "2.5")),
     }
     # A visitor who monologues (or leaves a TV on near the mic) gets a polite
     # cut-in after ~45 s of speech instead of an ever-growing transcript; see
@@ -132,9 +143,10 @@ def _turn_handling() -> TurnHandlingOptions:
 # that could not survive a 429 — every rung hit the same quota.
 # Verify availability anytime with: python tests/probe_llm.py
 
-# Spoken answers should be 1-2 sentences; cap output hard so a rambling
-# generation can't blow up TTS time (and Cartesia credits).
-VOICE_MAX_OUTPUT_TOKENS = int(os.environ.get("VOICE_MAX_OUTPUT_TOKENS", "140"))
+# The persona caps spoken answers at 40 words (~55 tokens); this is only the
+# backstop so a rambling generation can't blow up TTS time and Cartesia
+# credits. Low enough to bound cost, high enough not to cut a sentence off.
+VOICE_MAX_OUTPUT_TOKENS = int(os.environ.get("VOICE_MAX_OUTPUT_TOKENS", "100"))
 
 # BM25 confidence threshold: below this, retrieval is untrustworthy and the
 # full resume (~2.5K tokens) is injected instead. Calibrated in
@@ -164,7 +176,7 @@ trim_user_text = llm_voice.trim_user_text
 class PaymanshuAgent(Agent):
     """The voice agent representing Paymanshu.
 
-    Resume context is injected per-turn (not via an LLM tool): a tool call
+    Resume context is injected per LLM call (not via an LLM tool): a tool call
     costs a full extra LLM round-trip (~600ms+) per question. Injection is
     ~0.3ms of BM25 and zero extra inference.
     """
@@ -172,36 +184,21 @@ class PaymanshuAgent(Agent):
     def __init__(self) -> None:
         super().__init__(instructions=RESUME_PERSONA_INSTRUCTIONS)
 
-    async def on_user_turn_completed(
-        self, turn_ctx: ChatContext, new_message: ChatMessage
-    ) -> None:
-        query = new_message.text_content or ""
-        trimmed = trim_user_text(query)
-        if trimmed != query:
-            logger.info("long user turn trimmed: %d -> %d chars", len(query), len(trimmed))
-            new_message.content = [trimmed]
-            query = trimmed
-        index = get_resume_index()
-        context, score = index.search_scored(query, top_k=2)
-
-        if score < RESUME_SCORE_THRESHOLD:
-            # Low retrieval confidence (vague/small-talk query) — give the
-            # LLM the whole resume rather than trusting a weak match.
-            context = index.full_text
-            source = "full-resume"
-        else:
-            source = "bm25-top2"
-
-        logger.info(
-            "context injection: score=%.2f source=%s chars=%d query=%r",
-            score, source, len(context), query[:80],
-        )
-        # Added to this turn only (no update_chat_ctx) so history doesn't
-        # accumulate a copy of the resume on every exchange.
-        turn_ctx.add_message(
-            role="assistant",
-            content=f"[Context for the next answer — internal, not spoken]\n{context}",
-        )
+    async def llm_node(self, chat_ctx: ChatContext, tools, model_settings):
+        """Every LLM call (preemptive or final) sees the session's history plus
+        this turn's resume context, STT word fixes and the long-turn trim, all
+        on a copy (llm_voice.prepare_voice_ctx). Nothing is added in
+        on_user_turn_completed any more: that made LiveKit throw away its
+        preemptive generation on every turn. History doesn't accumulate resume
+        copies, since the context exists only in the per-call copy."""
+        ctx, info = llm_voice.prepare_voice_ctx(chat_ctx, get_resume_index(), RESUME_SCORE_THRESHOLD)
+        if info:
+            logger.info(
+                "context injection: score=%.2f source=%s chars=%d query=%r",
+                info["score"], info["source"], info["chars"], info["query"][:80],
+            )
+        async for chunk in Agent.default.llm_node(self, ctx, tools, model_settings):
+            yield chunk
 
     async def on_user_turn_exceeded(self, ev) -> None:
         """The caller has talked for ~45 s straight: cut in briefly, replying to
@@ -296,7 +293,11 @@ async def voice_agent(ctx: agents.JobContext):
         stt_model = google.STT(model="chirp")
         logger.info("Using Google Chirp STT (fallback)")
     else:
-        stt_model = deepgram.STT(model="nova-3", language="en")
+        # Keyterm prompting (names Deepgram should expect) is billed extra, so
+        # it's opt-in: VOICE_STT_KEYTERMS=true. Free regex fixes always apply
+        # (voice_lexicon.STT_FIXES, in llm_voice.prepare_voice_ctx).
+        stt_kwargs = {"keyterms": voice_lexicon.STT_KEYTERMS} if voice_lexicon.USE_STT_KEYTERMS else {}
+        stt_model = deepgram.STT(model="nova-3", language="en", **stt_kwargs)
 
     # LLM: the VOICE_LADDER from llm_models, each entry guarded by the shared
     # quota breaker (see llm_voice). Ordering is latency-first — 3.5-flash's
@@ -308,12 +309,16 @@ async def voice_agent(ctx: agents.JobContext):
 
     # TTS: Cartesia sonic-3 primary; Deepgram Aura as credit/rate-limit fallback.
     # (Bare "sonic" was sunsetted — see tests/probe_cartesia.sh.)
+    cartesia_kwargs = {}
+    if voice_lexicon.CARTESIA_PRONUNCIATION_DICT_ID:
+        cartesia_kwargs["pronunciation_dict_id"] = voice_lexicon.CARTESIA_PRONUNCIATION_DICT_ID
     cartesia_tts = cartesia.TTS(
         model=os.environ.get("CARTESIA_MODEL", "sonic-3"),
         voice=os.environ.get(
             "CARTESIA_VOICE_ID",
             "79a125e8-cd45-4c13-8a67-188112f4dd22",
         ),
+        **cartesia_kwargs,
     )
     deepgram_tts = deepgram.TTS()
     tts_model = lk_tts.FallbackAdapter([cartesia_tts, deepgram_tts])
@@ -373,6 +378,9 @@ async def voice_agent(ctx: agents.JobContext):
         # Fires user_state_changed -> "away" after this long with nobody
         # speaking; drives the idle check-in and hang-up below.
         user_away_timeout=VOICE_USER_AWAY_S,
+        # Pronunciation fixes ("resume" -> "résumé") on the text going to TTS
+        # only; transcripts and history keep the real spelling. voice_lexicon.
+        tts_text_transforms=voice_lexicon.tts_transforms(),
     )
 
     # Per-session STT/LLM/TTS usage totals + estimated cost, logged at

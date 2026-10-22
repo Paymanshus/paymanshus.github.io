@@ -42,6 +42,7 @@ WARM-UP AND HEALTH
 import asyncio
 import dataclasses
 import os
+import re
 import time
 import logging
 
@@ -201,11 +202,96 @@ def trim_user_text(text: str, limit: int | None = None) -> str:
     text = (text or "").strip()
     if limit <= 0 or len(text) <= limit:
         return text
+    if text.startswith(_TRIM_MARK) and len(text) <= limit + len(_TRIM_MARK):
+        return text  # already trimmed (idempotent across repeated LLM calls)
     tail = text[-limit:]
     space = tail.find(" ")
     if 0 <= space < 40:
         tail = tail[space + 1:]
-    return "(earlier part trimmed) ..." + tail
+    return _TRIM_MARK + tail
+
+
+_TRIM_MARK = "(earlier part trimmed) ..."
+
+
+CONTEXT_PREFIX = "[Context for the next answer — internal, not spoken]\n"
+
+
+def prepare_voice_ctx(chat_ctx, index, threshold: float):
+    """What a voice LLM call actually sends, built on a COPY of the session's
+    chat context (returns (ctx, info) for logging):
+
+      - every user message: STT word fixes (voice_lexicon) and the long-turn
+        trim, so a misheard name or a ramble never reaches the model as-is;
+      - resume context for the latest user message, inserted just before it:
+        BM25 top-2, or the full resume when BM25 isn't confident.
+
+    Doing this per LLM call rather than in on_user_turn_completed is what keeps
+    LiveKit's preemptive generation valid: it compares the chat context it
+    started with against the one at end of turn, and a message added in
+    on_user_turn_completed made them differ on every turn (2026-10-22 logs:
+    every turn invalidated, so every turn paid for two LLM calls and waited
+    for the second).
+    """
+    import voice_lexicon
+
+    ctx = chat_ctx.copy()
+    items = ctx.items
+    last_user = None
+    for i, item in enumerate(items):
+        if getattr(item, "type", None) == "message" and item.role == "user":
+            raw = item.text_content or ""
+            clean = trim_user_text(voice_lexicon.fix_transcript(raw))
+            if clean != raw:
+                items[i] = item.model_copy(update={"content": [clean]})
+            last_user = i
+    if last_user is None:
+        return ctx, {}
+    query = items[last_user].text_content or ""
+    context, score = index.search_scored(query, top_k=2)
+    source = "bm25-top2"
+    if score < threshold:
+        context, source = index.full_text, "full-resume"
+    items.insert(last_user, lk_llm.ChatMessage(role="assistant", content=[CONTEXT_PREFIX + context]))
+    return ctx, {"score": score, "source": source, "chars": len(context), "query": query}
+
+
+# Chat-template control tokens that some providers leak into the text stream
+# (seen on the live site: "<end...>" / "|end|" at the start of a reply). They
+# aren't spoken but they land in the transcript and the chat history.
+_SPECIAL_TOKEN = re.compile(
+    r"<\|[^|<>]{0,40}\|>"              # <|end|>, <|im_end|>, <|eot_id|>
+    r"|<｜[^｜<>]{0,40}｜>"             # DeepSeek's <｜end▁of▁sentence｜>
+    r"|</?(?:end|eos|eot|bos|s|im_start|im_end)[^<>\s]{0,30}>"  # <end_of_turn>, </s>
+    r"|\|(?:end|eot|eos|im_end)[a-z_]{0,20}\|",                  # |end|
+    re.IGNORECASE,
+)
+# A possibly unfinished token at the end of the text so far.
+_TOKEN_PREFIX = re.compile(r"(?:<[|｜/]?|[|｜])[^<>\s|｜]{0,40}[|｜]?\Z")
+
+
+class TokenScrubber:
+    """Removes leaked special tokens from streamed text. Holds back a trailing
+    fragment that could still become a token (a lone "<|end" waiting for
+    "|>"), so a token split across chunks is caught too."""
+
+    def __init__(self) -> None:
+        self._held = ""
+
+    def feed(self, text: str) -> str:
+        buf = _SPECIAL_TOKEN.sub("", self._held + text)
+        m = _TOKEN_PREFIX.search(buf)
+        self._held = m.group() if m else ""
+        return buf[: len(buf) - len(self._held)]
+
+    def flush(self) -> str:
+        out = _SPECIAL_TOKEN.sub("", self._held)
+        self._held = ""
+        return out
+
+
+def scrub_special_tokens(text: str) -> str:
+    return _SPECIAL_TOKEN.sub("", text)
 
 
 _END = object()
@@ -232,7 +318,8 @@ class HedgedLLM(lk_llm.LLM):
         # Per-model totals for this session's cost summary (observability).
         self.usage_totals: dict[str, dict] = {}
 
-    def _record_usage(self, llm: lk_llm.LLM, usage, ttft_ms: float, hedged: bool) -> None:
+    def _record_usage(self, llm: lk_llm.LLM, usage, ttft_ms: float, hedged: bool,
+                      text: str = "") -> None:
         model = llm.model
         prompt = getattr(usage, "prompt_tokens", 0) or 0
         cached = getattr(usage, "prompt_cached_tokens", 0) or 0
@@ -247,10 +334,14 @@ class HedgedLLM(lk_llm.LLM):
         t["completion_tokens"] += out
         if usd is not None and t["est_usd"] is not None:
             t["est_usd"] += usd
+        # The reply text makes length tuning possible from the logs (words=).
+        # Note a call LiveKit later discards (an invalidated preemptive
+        # generation) is logged and billed here too.
         logger.info(
-            "voice llm-usage model=%s ttft_ms=%.0f hedged=%s in=%d cached=%d out=%d est_usd=%s",
+            "voice llm-usage model=%s ttft_ms=%.0f hedged=%s in=%d cached=%d out=%d est_usd=%s "
+            "words=%d reply=%r",
             model, ttft_ms, hedged, prompt, cached, out,
-            f"{usd:.6f}" if usd is not None else "?",
+            f"{usd:.6f}" if usd is not None else "?", len(text.split()), text[:240],
         )
 
     @property
@@ -365,21 +456,36 @@ class HedgedLLMStream(lk_llm.LLMStream):
             log("voice hedge: served by %s, first token %.0fms%s", llms[winner].label, ttft_ms,
                 " (hedged)" if "backup" in racers else "")
             usage = None
+            scrubber = TokenScrubber()
+            reply: list[str] = []
+
+            def forward(chunk) -> None:
+                delta = getattr(chunk, "delta", None)
+                if delta is not None and delta.content:
+                    delta.content = scrubber.feed(delta.content)
+                    reply.append(delta.content)
+                self._event_ch.send_nowait(chunk)
+
             for chunk in buffers[winner]:
                 usage = getattr(chunk, "usage", None) or usage
-                self._event_ch.send_nowait(chunk)
+                forward(chunk)
             while True:
                 name, item = await events.get()
                 if name != winner:
                     continue
                 if item is _END:
-                    h._record_usage(llms[winner], usage, ttft_ms, "backup" in racers)
+                    tail = scrubber.flush()
+                    if tail:
+                        reply.append(tail)
+                        self._event_ch.send_nowait(lk_llm.ChatChunk(
+                            id="hedge-tail", delta=lk_llm.ChoiceDelta(role="assistant", content=tail)))
+                    h._record_usage(llms[winner], usage, ttft_ms, "backup" in racers, "".join(reply))
                     return
                 usage = getattr(item, "usage", None) or usage
                 if isinstance(item, BaseException):
                     raise item if isinstance(item, APIConnectionError | APIStatusError) else \
                         APIConnectionError(f"{llms[winner].label} failed mid-stream: {item}")
-                self._event_ch.send_nowait(item)
+                forward(item)
         finally:
             for task in racers.values():
                 if not task.done():

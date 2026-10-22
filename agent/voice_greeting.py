@@ -106,11 +106,17 @@ async def say_cached(session, text: str, *, tts, model: str, voice: str,
                      allow_interruptions: bool = True, cache_dir: Path | None = None):
     """Speak `text` from cached audio, rendering it once if needed. Returns the
     SpeechHandle. Any cache or TTS failure falls back to a live session.say."""
-    key = cache_key(text, model=model, voice=voice)
+    # Rendered directly with tts.synthesize, which skips the session's TTS text
+    # transforms, so apply the pronunciation fixes here. Keyed on the spoken
+    # form: editing voice_lexicon re-renders affected lines.
+    import voice_lexicon
+
+    spoken = voice_lexicon.spoken_form(text)
+    key = cache_key(spoken, model=model, voice=voice)
     try:
         cached = load_pcm(key, cache_dir)
         if cached is None:
-            cached = await render(text, tts, key, cache_dir)
+            cached = await render(spoken, tts, key, cache_dir)
             source = "rendered"
         else:
             source = "cache"

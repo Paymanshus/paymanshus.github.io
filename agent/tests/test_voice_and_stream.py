@@ -247,3 +247,120 @@ async def test_stream_reports_llm_unavailable(client, monkeypatch):
 async def test_stream_validates_before_streaming(client):
     resp = await client.post("/api/chat/stream", json={"message": "   "})
     assert resp.status == 400
+
+
+# ─── Per-call context (preemptive generation stays valid) ───────────
+
+import voice_lexicon
+from livekit.agents import llm as lk_llm
+
+
+class _Index:
+    full_text = "FULL RESUME"
+
+    def search_scored(self, query, top_k=2):
+        return ("BM25: " + query, 5.0) if "maersk" in query.lower() else ("weak", 0.5)
+
+
+def _session_ctx(*turns):
+    ctx = lk_llm.ChatContext.empty()
+    ctx.add_message(role="system", content="persona")
+    for role, text in turns:
+        ctx.add_message(role=role, content=text)
+    return ctx
+
+
+async def test_context_goes_right_before_the_latest_question():
+    session = _session_ctx(("assistant", "Hi there"), ("user", "what do you do at maersk?"))
+    ctx, info = llm_voice.prepare_voice_ctx(session, _Index(), 2.5)
+    texts = [(i.role, i.text_content) for i in ctx.items]
+    assert texts[-2] == ("assistant", llm_voice.CONTEXT_PREFIX + "BM25: what do you do at maersk?")
+    assert texts[-1] == ("user", "what do you do at maersk?")
+    assert info["source"] == "bm25-top2"
+
+
+async def test_session_history_is_never_modified():
+    """LiveKit compares the preemptive context with the end-of-turn one; any
+    change to the session's own context invalidates the early start."""
+    session = _session_ctx(("user", "who is pimanshu?"))
+    before = [(i.role, i.text_content) for i in session.items]
+    ctx, _ = llm_voice.prepare_voice_ctx(session, _Index(), 2.5)
+    assert [(i.role, i.text_content) for i in session.items] == before
+    assert ctx.items[-1].text_content == "who is Paymanshu?", "STT fix applied to the copy"
+
+
+async def test_weak_match_sends_the_full_resume():
+    ctx, info = llm_voice.prepare_voice_ctx(_session_ctx(("user", "cool, nice")), _Index(), 2.5)
+    assert info["source"] == "full-resume"
+    assert ctx.items[-2].text_content.endswith("FULL RESUME")
+
+
+async def test_trim_is_idempotent_across_calls():
+    once = llm_voice.trim_user_text("word " * 400, 100)
+    assert llm_voice.trim_user_text(once, 100) == once
+
+
+# ─── Special tokens ─────────────────────────────────────────────────
+
+@pytest.mark.parametrize("raw, clean", [
+    ("<|end|>Hey there", "Hey there"),
+    ("<｜end▁of▁sentence｜>So right now", "So right now"),
+    ("|end|Sure.", "Sure."),
+    ("<end_of_turn>Okay", "Okay"),
+    ("Done.<|eot_id|>", "Done."),
+])
+async def test_special_tokens_are_removed(raw, clean):
+    assert llm_voice.scrub_special_tokens(raw) == clean
+
+
+async def test_token_split_across_chunks_is_caught():
+    s = llm_voice.TokenScrubber()
+    out = s.feed("<|en") + s.feed("d|>Hi, ") + s.feed("I'm Paymanshu.") + s.flush()
+    assert out == "Hi, I'm Paymanshu."
+
+
+async def test_ordinary_text_passes_through():
+    s = llm_voice.TokenScrubber()
+    text = "LangGraph, with an LLM judge checking the answers. Ten-x, not a hundred-x."
+    assert s.feed(text) + s.flush() == text
+
+
+# ─── Pronunciation and STT fixes ────────────────────────────────────
+
+async def test_spoken_forms_are_whole_words():
+    assert voice_lexicon.spoken_form("my resume") == "my résumé"
+    assert voice_lexicon.spoken_form("it resumed") == "it resumed"
+    assert voice_lexicon.spoken_form("Maersk and MAE") == "Maersk and M-A-E"
+    assert voice_lexicon.spoken_form("Shipment CoCaptain") == "Shipment Co-Captain"
+
+
+async def test_streaming_spoken_forms_handle_split_words():
+    async def chunks():
+        for c in ("check my res", "ume, it's", " on the site"):
+            yield c
+
+    out = "".join([c async for c in voice_lexicon.spoken_forms_transform(chunks())])
+    assert out == "check my résumé, it's on the site"
+
+
+@pytest.mark.parametrize("heard, fixed", [
+    ("thought you were Pimanshu", "thought you were Paymanshu"),
+    ("that shipment co captain project", "that shipment CoCaptain project"),
+    ("did you work at Mersk", "did you work at Maersk"),
+    ("wear a mask", "wear a mask"),
+])
+async def test_stt_fixes(heard, fixed):
+    assert voice_lexicon.fix_transcript(heard) == fixed
+
+
+async def test_cached_lines_render_the_spoken_form(tmp_path):
+    rendered = []
+
+    class _RecTTS(FakeTTS):
+        def synthesize(self, text):
+            rendered.append(text)
+            return super().synthesize(text)
+
+    await voice_greeting.say_cached(FakeSession(), "my resume is on the site", tts=_RecTTS(),
+                                    model="m", voice="v", cache_dir=tmp_path)
+    assert rendered == ["my résumé is on the site"]
