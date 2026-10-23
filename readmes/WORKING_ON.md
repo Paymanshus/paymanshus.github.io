@@ -38,6 +38,14 @@ Not merged or deployed; deploys need the owner's OK.
 - 5-minute cap per voice session
 - Streamed terminal replies (`lib/chatStream.ts`, `ChatResume.tsx`)
 
+## In progress (branch `fix/voice-ui-resume-html`, worktree `~/code/vibesite2k26-ui`)
+Not committed, merged or deployed (2026-10-22). Frontend only.
+- Voice call layout rebuilt as `SessionLayout` (in-flow rows, legible
+  transcript, End call on touch), mic read as RMS level, inward ring cue
+- Resume tab: HTML resume iframe + "Get the PDF"; new PDF at the same URL
+- `ChatResume.tsx`: input attributes + "resume tab" copy only. Expect small
+  conflicts with `claude/changes` in `ChatResume.tsx` / `VoiceResume.tsx`
+
 ## Later
 - Turn-detection / endpointing tuning (~1.2 s median end-of-turn delay)
 - Cached full-resume prefix instead of per-turn BM25 injection (the injection

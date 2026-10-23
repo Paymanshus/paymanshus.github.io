@@ -15,8 +15,10 @@
 
 ## Deploying and shared work
 - Never deploy, push to `main`, or touch the live VM's running containers
-  without the owner's explicit go-ahead. The deploy runbook is
-  `deploy/oracle/README.md`.
+  without the owner's explicit go-ahead. Pushing to `main` deploys the site,
+  and the voice agent too when agent files changed (tests run first); see
+  `DEPLOY.md` for the CI/CD and manual paths. After a push, watch the Actions
+  run (`gh run watch`) and report whether it went green.
 - Other Claude sessions often work in the same checkout. Make changes in a
   separate git worktree and branch; never switch branches in the shared
   checkout. Check `git log` before editing `agent/main.py`, and leave a note in
