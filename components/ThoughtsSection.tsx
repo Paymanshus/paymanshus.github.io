@@ -9,9 +9,9 @@ export default function ThoughtsSection({ posts }: { posts: BlogPostPreview[] })
       <div className="mx-auto max-w-4xl">
         <header className="mb-16">
           <h1 className="mb-4 text-4xl font-light tracking-tight">Thoughts</h1>
-          <p className="max-w-2xl font-serif text-xl italic leading-relaxed text-text-secondary">
+          {/* <p className="max-w-2xl font-serif text-xl italic leading-relaxed text-text-secondary">
             Route-based writing, rendered from Markdown, with each post getting its own crawlable page.
-          </p>
+          </p> */}
         </header>
 
         <div className="flex flex-col gap-12">

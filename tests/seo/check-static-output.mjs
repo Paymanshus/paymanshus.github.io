@@ -78,7 +78,6 @@ console.log('home /');
     const website = blocks.find((b) => b['@type'] === 'WebSite');
     const profile = blocks.find((b) => b['@type'] === 'ProfilePage');
     check('Person node with stable @id', person?.['@id'] === PERSON_ID);
-    check('Person declares Maersk employer', person?.worksFor?.name === 'Maersk');
     check('Person sameAs includes corrected LinkedIn', (person?.sameAs ?? []).includes('https://www.linkedin.com/in/paymanshus'));
     check('WebSite publisher references person @id', website?.publisher?.['@id'] === PERSON_ID);
     check('ProfilePage mainEntity references person @id', profile?.mainEntity?.['@id'] === PERSON_ID);

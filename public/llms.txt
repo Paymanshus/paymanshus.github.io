@@ -1,6 +1,6 @@
 # Paymanshu Sharma
 
-> ML Engineer at Maersk in Bangalore who builds agentic AI systems and real-time voice agents.
+> ML Engineer in Bangalore who builds agentic AI systems and real-time voice agents.
 
 This site is the personal portfolio of Paymanshu Sharma. It includes an interactive resume (available as a PDF, a terminal-style chat, and a live voice agent) and a blog on interface design, AI, and frontend engineering.
 

@@ -7,9 +7,9 @@ import { absoluteUrl, createMetadata, personRef } from '@/lib/site';
 export const metadata: Metadata = createMetadata({
   title: 'Experience',
   description:
-    'Interactive resume of Paymanshu Sharma, Machine Learning Engineer at Maersk — read the PDF, ask the terminal, or talk to a voice agent grounded in his experience.',
+    'Interactive resume of Paymanshu Sharma, Machine Learning Engineer — read the PDF, ask the terminal, or talk to a voice agent grounded in his experience.',
   path: '/experience',
-  keywords: ['resume', 'interactive resume', 'voice resume', 'Maersk'],
+  keywords: ['resume', 'interactive resume', 'voice resume'],
 });
 
 export default function ExperiencePage() {

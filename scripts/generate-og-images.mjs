@@ -104,7 +104,7 @@ function defaultCard() {
         type: 'div',
         props: {
           style: { display: 'flex', marginTop: 20, fontSize: 36, color: COLORS.secondary },
-          children: 'Machine Learning Engineer · Maersk',
+          children: 'Machine Learning Engineer',
         },
       },
       {
