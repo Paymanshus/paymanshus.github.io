@@ -13,7 +13,10 @@ const HTML_URL = '/assets/Paymanshu_Sharma_Resume.html';
 // is let out to the panel: transparent paper, a touch larger on wide
 // screens, and reflowing on phones instead of scrolling sideways. Injected
 // rather than edited in, so a fresh export can replace the file untouched.
+// iOS Safari "text autosizing" otherwise inflates the bullets to about twice
+// their size inside the frame, so text-size-adjust is pinned to 100%.
 const EMBED_CSS = `
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { background: transparent !important; }
 html { scrollbar-width: none; }
 main { width: auto !important; max-width: 210mm; zoom: 1.12; }

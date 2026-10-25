@@ -7,6 +7,8 @@
 #
 # Files that are not listed stay hidden; the build prints a warning naming them.
 
+aas
+keypsake
 wrappedapp
 cerebro
 watchlistxplore

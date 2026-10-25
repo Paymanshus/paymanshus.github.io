@@ -28,6 +28,11 @@ export type ProjectImage = {
   height: number;
 };
 
+/** A muted, looping clip in `public/`; `poster` is shown until it plays. */
+export type ProjectVideo = ProjectImage & {
+  poster: string;
+};
+
 type ProjectFrontmatter = {
   title: string;
   summary: string;
@@ -40,6 +45,8 @@ type ProjectFrontmatter = {
   thumbnail?: ProjectImage;
   /** Top of the detail view; falls back to the thumbnail. */
   hero?: ProjectImage;
+  /** Top of the detail view in place of the hero image, when set. */
+  video?: ProjectVideo;
   /** Screenshot gallery in the detail view. */
   media: ProjectImage[];
 };
@@ -74,6 +81,16 @@ function parseImage(value: unknown, slug: string, field: string): ProjectImage {
   return { src: image.src, alt: image.alt, width: Number(image.width), height: Number(image.height) };
 }
 
+function parseVideo(value: unknown, slug: string): ProjectVideo {
+  const poster = (value as { poster?: unknown } | undefined)?.poster;
+
+  if (!poster) {
+    throw new Error(`Project "${slug}" has a video without a poster.`);
+  }
+
+  return { ...parseImage(value, slug, 'video'), poster: String(poster) };
+}
+
 function parseFrontmatter(slug: string, data: unknown): ProjectFrontmatter {
   if (!data || typeof data !== 'object') {
     throw new Error(`Invalid frontmatter in project "${slug}".`);
@@ -100,6 +117,7 @@ function parseFrontmatter(slug: string, data: unknown): ProjectFrontmatter {
     live: frontmatter.live as string | undefined,
     thumbnail: frontmatter.thumbnail ? parseImage(frontmatter.thumbnail, slug, 'thumbnail') : undefined,
     hero: frontmatter.hero ? parseImage(frontmatter.hero, slug, 'hero') : undefined,
+    video: frontmatter.video ? parseVideo(frontmatter.video, slug) : undefined,
     media: ((frontmatter.media as unknown[] | undefined) ?? []).map((item, index) =>
       parseImage(item, slug, `media[${index}]`),
     ),

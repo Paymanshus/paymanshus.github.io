@@ -154,7 +154,7 @@ export default function ProjectCard({ project, index, onOpen }: ProjectCardProps
 
           <div className="mt-6 flex items-end justify-between gap-4">
             <ProjectLinks project={project} />
-            <span className={`${metaClass} shrink-0 transition-colors duration-300 group-hover:text-text-primary`}>
+            <span className={`${metaClass} shrink-0 transition-colors duration-300 group-hover:text-brand-red`}>
               {'[ open ]'}
             </span>
           </div>

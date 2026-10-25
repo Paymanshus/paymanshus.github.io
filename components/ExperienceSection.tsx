@@ -83,7 +83,7 @@ export default function ExperienceSection() {
               key={m}
               onClick={() => selectMode(m)}
               className={`relative flex-1 sm:flex-none justify-center px-3 sm:px-6 py-2 rounded-full text-xs font-mono uppercase tracking-widest transition-colors duration-300 z-10 flex items-center gap-2 ${
-                mode === m ? 'text-bg' : 'text-text-secondary hover:text-text-primary'
+                mode === m ? 'text-bg' : 'text-text-secondary hover:text-brand-red'
               }`}
             >
               {m === 'pdf' && <FileText className="w-3 h-3 max-[359px]:hidden" />}

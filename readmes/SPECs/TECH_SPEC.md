@@ -138,7 +138,9 @@ The home route is a no-scroll hero state. The experience, cooking and thoughts r
   hero is the thumbnail. The panel is about 88dvh tall and max 6xl wide on
   desktop, and almost full screen on phones (`100dvh - 1rem`). It has a mono
   path header (`> ~/cooking/<slug>`, `[ esc ] close`), corner ticks and one red
-  scan line on open. Inside: hero, then the writeup (`.thought-post-content
+  scan line on open (started once the card-to-panel morph lands, so it reads on
+  desktop too). Inside: hero (or a muted autoplay loop when the project has a
+  `video`; reduced motion shows its poster with controls), then the writeup (`.thought-post-content
   .cooking-writeup`) beside a sticky fact column (status, date, stack, links),
   then the screenshot gallery. Escape, the backdrop and the close button all
   close it. Body scroll is locked while it is open, and focus returns to the
@@ -214,8 +216,10 @@ Frontmatter: `title`, `summary` (card line), `date` (last meaningful update),
 until something ships), `stack` (list), optional `repo` (omit for private
 repos, and "private repo" is shown instead), optional `live`, optional
 `thumbnail` (card), optional `hero` (detail-view top, defaults to the
-thumbnail), and optional `media` (gallery). Every image is
-`{src, alt, width, height}`, and a missing field fails the build.
+thumbnail), optional `video` (detail-view top in place of the hero: an MP4
+plus a `poster` image), and optional `media` (gallery). Every image is
+`{src, alt, width, height}` (a video adds `poster`), and a missing field fails
+the build.
 
 Media lives in `public/cooking/<slug>/` as WebP. Convert source images with
 `node scripts/optimize-cooking-media.mjs <in> <out.webp> [maxW] [maxH]`. It

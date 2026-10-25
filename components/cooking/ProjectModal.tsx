@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import type { Project } from '@/lib/cooking';
 import ScreenGallery from '@/components/cooking/ScreenGallery';
 import { ProjectLinks, StatusTag, metaClass, projectNumber } from '@/components/cooking/shared';
@@ -47,8 +47,16 @@ function SideFact({ label, children }: { label: string; children: React.ReactNod
  */
 export default function ProjectModal({ project, index, onClose }: ProjectModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const reduceMotion = useReducedMotion();
   const hero = project.hero ?? project.thumbnail;
   const titleId = `cooking-modal-title-${project.slug}`;
+  const [landed, setLanded] = useState(false);
+
+  // Fallback for opens with no morph to wait on (e.g. straight from a #slug link).
+  useEffect(() => {
+    const timer = setTimeout(() => setLanded(true), 900);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
@@ -91,17 +99,22 @@ export default function ProjectModal({ project, index, onClose }: ProjectModalPr
           className="pointer-events-auto relative flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden border border-[#2e2e2e] bg-surface sm:h-[min(88dvh,960px)]"
           style={{ boxShadow: '0 40px 120px -40px rgba(0, 0, 0, 1), 0 0 0 1px rgba(255, 42, 42, 0.06)' }}
           transition={{ type: 'spring', stiffness: 220, damping: 28, mass: 0.9 }}
+          onLayoutAnimationComplete={() => setLanded(true)}
         >
           <CornerTicks />
 
-          {/* One red scan pass on open: the "lift" lands, then the panel reads in. */}
-          <motion.span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-brand-red/70"
-            initial={{ y: 0, opacity: 0 }}
-            animate={{ y: ['0dvh', '86dvh'], opacity: [0, 0.8, 0] }}
-            transition={{ duration: 0.7, delay: 0.15, ease: 'easeOut' }}
-          />
+          {/* One red scan pass on open: the "lift" lands, then the panel reads in.
+              It waits for the morph to finish; started mid-morph, it ran inside the
+              still card-sized panel on desktop and was never seen. */}
+          {landed ? (
+            <motion.span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-brand-red/70"
+              initial={{ y: 0, opacity: 0 }}
+              animate={{ y: ['0dvh', '86dvh'], opacity: [0, 0.8, 0] }}
+              transition={{ duration: 0.7, ease: 'easeOut' }}
+            />
+          ) : null}
 
           <header className="relative z-10 flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-6">
             <p className={`${metaClass} truncate normal-case tracking-[0.08em]`}>
@@ -111,14 +124,32 @@ export default function ProjectModal({ project, index, onClose }: ProjectModalPr
               ref={closeRef}
               type="button"
               onClick={onClose}
-              className={`${metaClass} shrink-0 transition-colors duration-300 hover:text-brand-red focus-visible:text-text-primary focus-visible:outline-none`}
+              className={`${metaClass} shrink-0 transition-colors duration-300 hover:text-brand-red active:text-brand-red focus-visible:text-brand-red focus-visible:outline-none`}
             >
               {'[ esc ] close'}
             </button>
           </header>
 
           <div className="relative flex-1 overflow-y-auto overscroll-contain">
-            {hero ? (
+            {project.video ? (
+              <div className="border-b border-border bg-bg">
+                <video
+                  src={project.video.src}
+                  poster={project.video.poster}
+                  width={project.video.width}
+                  height={project.video.height}
+                  aria-label={project.video.alt}
+                  // Reduced motion: hold on the poster and let the reader press play.
+                  autoPlay={!reduceMotion}
+                  controls={Boolean(reduceMotion)}
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  className="mx-auto block max-h-[62dvh] w-full object-contain"
+                />
+              </div>
+            ) : hero ? (
               <div className="border-b border-border bg-bg">
                 <motion.img
                   // Morph from the card image only when it is the same picture.

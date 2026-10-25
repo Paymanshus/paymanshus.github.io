@@ -785,8 +785,8 @@ function IdleView({ onStart }: { onStart: () => void }) {
             />
           </svg>
         </div>
-        {/* Solid-ish fill and a black halo on the caption keep both readable
-            over the particles drifting behind them. */}
+        {/* A solid-ish fill on the button, and a near-white, larger caption with
+            a black halo, keep both readable over the drifting particles. */}
         <button
           onClick={onStart}
           className="group relative overflow-hidden border border-[#2a2a2a] bg-black/75 px-8 py-4 font-mono text-sm uppercase tracking-widest transition-colors duration-300 hover:border-brand-red/50 text-white cursor-pointer"
@@ -797,7 +797,7 @@ function IdleView({ onStart }: { onStart: () => void }) {
             Start Voice
           </span>
         </button>
-        <p className="mt-6 px-4 text-[#9a9a9a] text-[11px] tracking-[0.2em] uppercase [text-shadow:0_0_6px_#000,0_0_12px_#000]">
+        <p className="mt-6 px-4 text-[#e8e8e8] text-[13px] font-medium tracking-[0.18em] uppercase [text-shadow:0_0_4px_#000,0_0_10px_#000,0_0_18px_#000]">
           Talk to an AI version of Paymanshu
         </p>
       </div>
@@ -899,7 +899,7 @@ function MicPermissionModal({
           </button>
           <button
             onClick={onCancel}
-            className="w-full px-6 py-3 text-[#888888] text-xs uppercase tracking-widest font-mono hover:text-white transition-colors duration-300 cursor-pointer"
+            className="w-full px-6 py-3 text-[#888888] text-xs uppercase tracking-widest font-mono hover:text-brand-red transition-colors duration-300 cursor-pointer"
           >
             Cancel
           </button>
@@ -1155,7 +1155,7 @@ function ErrorView({ message, onRetry }: { message: string; onRetry: () => void 
       <p className="text-[#8a8a8a] text-xs mb-6 max-w-sm">{message}</p>
       <button
         onClick={onRetry}
-        className="border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-[#888888] hover:text-white hover:border-brand-red/30 transition-colors cursor-pointer"
+        className="border border-[#1F1F1F] px-6 py-2 text-xs uppercase tracking-widest text-[#888888] hover:text-brand-red hover:border-brand-red/30 transition-colors cursor-pointer"
       >
         Retry
       </button>

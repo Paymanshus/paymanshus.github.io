@@ -35,6 +35,7 @@ export default function HeroSection() {
               gridColor="#ff2a2a"
               rippleIntensity={0.055}
               gridSize={10}
+              mobileGridSize={24}
               gridThickness={16}
               fadeDistance={1.2}
               vignetteStrength={2.2}
@@ -103,9 +104,10 @@ export default function HeroSection() {
 
               <Link
                 href="/thoughts"
-                className="group flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-text-secondary transition-colors duration-300 hover:text-text-primary"
+                className="group flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-text-primary/90 transition-colors duration-300 hover:text-brand-red"
               >
-                <span className="-ml-4 text-brand-red opacity-0 transition-all duration-300 group-hover:ml-0 group-hover:opacity-100">&gt;</span>
+                {/* Touch screens have no hover to reveal the caret, so it stays on there. */}
+                <span className="-ml-4 text-brand-red opacity-0 transition-all duration-300 group-hover:ml-0 group-hover:opacity-100 pointer-coarse:ml-0 pointer-coarse:opacity-100">&gt;</span>
                 Read Thoughts
               </Link>
             </div>

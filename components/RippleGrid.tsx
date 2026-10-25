@@ -8,6 +8,9 @@ type RippleGridProps = {
   gridColor?: string;
   rippleIntensity?: number;
   gridSize?: number;
+  /** Grid size at or below the mobile breakpoint, where the portrait canvas
+      otherwise leaves only a few huge cells on screen. */
+  mobileGridSize?: number;
   gridThickness?: number;
   fadeDistance?: number;
   vignetteStrength?: number;
@@ -20,6 +23,14 @@ type RippleGridProps = {
 
 const DEFAULT_MOUSE = { x: 0.5, y: 0.5 };
 const MOBILE_BREAKPOINT = 768;
+// A finger only reports where it is while it touches, so touch gets a stronger
+// pulse than the mouse (whose ripple is always following it) to read at all.
+// Influence above 1 also lights the lines near the touch (see the shader).
+const TOUCH_INFLUENCE = 2.6;
+
+function isMobileWidth() {
+  return typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT;
+}
 
 type FloorPerspectiveMapping = {
   perspective: number;
@@ -42,7 +53,7 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 function getFloorPerspectiveMapping(): FloorPerspectiveMapping {
-  if (typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT) {
+  if (isMobileWidth()) {
     return {
       perspective: 1050,
       rotateX: 70,
@@ -77,6 +88,7 @@ export default function RippleGrid({
   gridColor = '#ffffff',
   rippleIntensity = 0.05,
   gridSize = 10,
+  mobileGridSize,
   gridThickness = 15,
   fadeDistance = 1.5,
   vignetteStrength = 2,
@@ -203,6 +215,15 @@ void main() {
     color += glowIntensity * exp(-gridThickness * 0.5 * smoothGrid.y);
   }
 
+  // Touch pulses push influence past 1: light up the lines around the finger.
+  if (mouseInteraction && mouseInfluence > 1.0) {
+    vec2 touchUv = mousePosition * 2.0 - 1.0;
+    touchUv.x *= iResolution.x / iResolution.y;
+    float touchDist = length(uv - touchUv);
+    float r = mouseInteractionRadius * 0.6;
+    color *= 1.0 + (mouseInfluence - 1.0) * 0.9 * exp(-touchDist * touchDist / (r * r));
+  }
+
   float fade = exp(-2.0 * clamp(pow(dist, fadeDistance), 0.0, 1.0));
 
   vec2 vignetteCoords = vUv - 0.5;
@@ -259,12 +280,14 @@ void main() {
       const { clientHeight, clientWidth } = container;
       renderer.setSize(clientWidth, clientHeight);
       uniforms.iResolution.value = [clientWidth, clientHeight];
+      uniforms.gridSize.value = isMobileWidth() && mobileGridSize ? mobileGridSize : gridSize;
     };
 
     const handlePointerMove = (event: PointerEvent) => {
       if (!mouseInteraction) {
         return;
       }
+      const isTouch = event.pointerType !== 'mouse';
 
       const rect = container.getBoundingClientRect();
 
@@ -293,16 +316,31 @@ void main() {
         x: Math.max(0, Math.min(1, nextX)),
         y: Math.max(0, Math.min(1, nextY)),
       };
-      mouseInfluenceRef.current = 1;
+      if (isTouch && event.type === 'pointerdown') {
+        // Start the pulse where the finger landed, not glide over from the last spot.
+        mousePositionRef.current = targetMouseRef.current;
+        uniforms.mouseInfluence.value = TOUCH_INFLUENCE;
+      }
+      mouseInfluenceRef.current = isTouch ? TOUCH_INFLUENCE : 1;
     };
 
     const handlePointerLeave = () => {
       mouseInfluenceRef.current = 0;
     };
 
+    // A lifted finger leaves no pointer behind, so the pulse fades out.
+    const handlePointerUp = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') {
+        mouseInfluenceRef.current = 0;
+      }
+    };
+
     window.addEventListener('resize', resize);
     if (mouseInteraction) {
       window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerdown', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
       window.addEventListener('pointerleave', handlePointerLeave);
     }
     resize();
@@ -328,6 +366,9 @@ void main() {
       window.removeEventListener('resize', resize);
       if (mouseInteraction) {
         window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerdown', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+        window.removeEventListener('pointercancel', handlePointerUp);
         window.removeEventListener('pointerleave', handlePointerLeave);
       }
 
@@ -349,6 +390,7 @@ void main() {
     gridRotation,
     gridSize,
     gridThickness,
+    mobileGridSize,
     mouseInteraction,
     mouseInteractionRadius,
     opacity,
@@ -364,7 +406,7 @@ void main() {
     uniformsRef.current.enableRainbow.value = enableRainbow;
     uniformsRef.current.gridColor.value = hexToRgb(gridColor);
     uniformsRef.current.rippleIntensity.value = rippleIntensity;
-    uniformsRef.current.gridSize.value = gridSize;
+    uniformsRef.current.gridSize.value = isMobileWidth() && mobileGridSize ? mobileGridSize : gridSize;
     uniformsRef.current.gridThickness.value = gridThickness;
     uniformsRef.current.fadeDistance.value = fadeDistance;
     uniformsRef.current.vignetteStrength.value = vignetteStrength;
@@ -381,6 +423,7 @@ void main() {
     gridRotation,
     gridSize,
     gridThickness,
+    mobileGridSize,
     mouseInteraction,
     mouseInteractionRadius,
     opacity,

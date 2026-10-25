@@ -21,6 +21,12 @@ hero:                       # optional; top of the detail view, defaults to the 
   alt: What the image shows.
   width: 1600
   height: 900
+video:                      # optional muted loop; replaces the hero at the top of the detail view
+  src: /cooking/slug/clip.mp4   # H.264 with +faststart, no audio track; keep it under ~1 MB
+  poster: /cooking/slug/poster.webp
+  alt: What the clip shows.
+  width: 1280
+  height: 720
 media:                      # optional screenshot gallery at the bottom of the detail view
   - src: /cooking/slug/screen-1.webp
     alt: Caption shown under the screenshot.
