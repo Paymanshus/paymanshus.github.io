@@ -83,6 +83,48 @@ function mapScreenYToPlaneY(screenY: number, planeHeight: number, mapping: Floor
   return numerator / denominator / planeHeight;
 }
 
+/**
+ * Screen position of the floor's transform origin (its top centre), from the
+ * untransformed layout. Not getBoundingClientRect: on phones the floor's near
+ * edge passes behind the CSS camera (scale·height·sin(angle) > perspective),
+ * and the browser then reports a box tens of thousands of pixels wide, which
+ * pinned every touch to roughly the same spot.
+ */
+function getTransformOrigin(container: HTMLElement) {
+  const floor = container.offsetParent as HTMLElement | null;
+  const base = floor?.offsetParent?.getBoundingClientRect();
+
+  if (!floor || !base) {
+    return null;
+  }
+
+  return {
+    x: base.left + floor.offsetLeft + container.offsetLeft + container.offsetWidth / 2,
+    y: base.top + floor.offsetTop + container.offsetTop,
+  };
+}
+
+/**
+ * Inverse of the floor's CSS transform along x. The tilt draws each row wider
+ * the nearer it is (by 1 + y·tan(angle)/perspective at screen offset y), around
+ * the transform origin at the top centre.
+ */
+function mapScreenXToPlaneX(
+  offsetFromCentre: number,
+  screenY: number,
+  planeWidth: number,
+  mapping: FloorPerspectiveMapping,
+) {
+  const angle = (mapping.rotateX * Math.PI) / 180;
+  const rowScale = mapping.scale * (1 + (Math.max(0, screenY) * Math.tan(angle)) / mapping.perspective);
+
+  if (!planeWidth) {
+    return 0.5;
+  }
+
+  return 0.5 + offsetFromCentre / (rowScale * planeWidth);
+}
+
 export default function RippleGrid({
   enableRainbow = false,
   gridColor = '#ffffff',
@@ -289,33 +331,26 @@ void main() {
       }
       const isTouch = event.pointerType !== 'mouse';
 
-      const rect = container.getBoundingClientRect();
+      const origin = getTransformOrigin(container);
+      const planeWidth = container.clientWidth;
+      const planeHeight = container.clientHeight;
 
-      if (!rect.width || !rect.height) {
+      if (!origin || !planeWidth || !planeHeight) {
         return;
       }
 
-      const nextX = (event.clientX - rect.left) / rect.width;
-      const screenY = event.clientY - rect.top;
-      const isInside = nextX >= 0 && nextX <= 1 && screenY >= 0 && screenY <= rect.height;
+      const mapping = getFloorPerspectiveMapping();
+      const screenY = event.clientY - origin.y;
+      const planeY = mapScreenYToPlaneY(screenY, planeHeight, mapping);
+      const planeX = mapScreenXToPlaneX(event.clientX - origin.x, screenY, planeWidth, mapping);
+      const isInside = screenY >= 0 && planeX >= 0 && planeX <= 1 && planeY <= 1;
 
       if (!isInside) {
         mouseInfluenceRef.current = 0;
         return;
       }
 
-      const planeHeight = container.clientHeight || rect.height;
-      const mappedPlaneY = mapScreenYToPlaneY(
-        screenY,
-        planeHeight,
-        getFloorPerspectiveMapping(),
-      );
-      const nextY = 1 - mappedPlaneY;
-
-      targetMouseRef.current = {
-        x: Math.max(0, Math.min(1, nextX)),
-        y: Math.max(0, Math.min(1, nextY)),
-      };
+      targetMouseRef.current = { x: planeX, y: 1 - planeY };
       if (isTouch && event.type === 'pointerdown') {
         // Start the pulse where the finger landed, not glide over from the last spot.
         mousePositionRef.current = targetMouseRef.current;
