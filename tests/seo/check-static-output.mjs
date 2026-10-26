@@ -95,6 +95,7 @@ console.log('home /');
       'og:image is the default card (no trailing slash)',
       html.includes(`property="og:image" content="${SITE_URL}/og/default.png"`),
     );
+    check('Person declares Maersk employer', person?.worksFor?.name === 'Maersk');
     check('RSS feed is discoverable', html.includes(`${SITE_URL}/feed.xml`));
   }
 }
