@@ -30,8 +30,8 @@ export default function SiteFooter() {
             {siteConfig.name}
           </p>
           <p className="mt-3 text-sm leading-relaxed text-text-secondary">
-            {siteConfig.jobTitle} at {siteConfig.employer}, {siteConfig.location}. Building agentic
-            AI and real-time voice systems.
+            {siteConfig.jobTitle}, {siteConfig.location}. Building agentic AI and real-time voice
+            systems.
           </p>
           <a
             href={`mailto:${siteConfig.email}`}
@@ -52,13 +52,6 @@ export default function SiteFooter() {
                 {link.label}
               </Link>
             ))}
-            <Link
-              href="/feed.xml"
-              prefetch={false}
-              className="font-mono text-xs uppercase tracking-[0.18em] text-text-secondary transition-colors duration-300 hover:text-brand-red"
-            >
-              RSS
-            </Link>
           </nav>
 
           <nav aria-label="Elsewhere" className="flex flex-col gap-3">

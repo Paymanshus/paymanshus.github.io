@@ -276,8 +276,11 @@ Current pieces:
   and the JSON-LD **entity graph**: `PERSON_ID`/`WEBSITE_ID` stable `@id`s plus
   `personJsonLd()` / `websiteJsonLd()` / `personRef()` builders. Every page
   references the same Person `@id` (full node on home; stub nodes elsewhere) so
-  crawlers reconcile one entity. Identity facts (ML Engineer at Maersk, Bangalore,
-  LinkedIn `/in/paymanshus`) mirror `content/resumedump.md`. Document title is
+  crawlers reconcile one entity. Identity facts (ML Engineer, Bangalore,
+  LinkedIn `/in/paymanshus`) mirror `content/resumedump.md`. The site is
+  company-agnostic in visible chrome: the employer appears only in the resume,
+  `/experience` meta, and the Person `worksFor` JSON-LD (for name + company
+  searches), never in the footer, OG cards, home description or llms.txt. Document title is
   `Paymanshu Sharma | AI Product Engineer`. GSC HTML-tag token lives here as
   `GOOGLE_SITE_VERIFICATION` (env override, committed fallback). The HTML-file
   method is `public/google51d43957481c87ef.html` at the site root.

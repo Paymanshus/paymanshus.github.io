@@ -1,6 +1,6 @@
 # Paymanshu Sharma — Portfolio
 
-Personal portfolio for Paymanshu Sharma, Machine Learning Engineer at Maersk
+Personal portfolio for Paymanshu Sharma, Machine Learning Engineer
 (Bangalore). Live at **https://paymanshus.github.io**.
 
 The site is a statically-exported Next.js app plus a standalone Python

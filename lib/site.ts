@@ -4,10 +4,11 @@ export const siteConfig = {
   name: 'Paymanshu Sharma',
   firstName: 'Paymanshu',
   jobTitle: 'Machine Learning Engineer',
+  // Structured data and /experience meta only; never shown in site chrome.
   employer: 'Maersk',
   defaultTitle: 'Paymanshu Sharma | AI Product Engineer',
   description:
-    'Paymanshu Sharma is a Machine Learning Engineer at Maersk, Bangalore, building agentic AI and voice systems. Portfolio with an interactive resume you can talk to — PDF, terminal, and voice — plus essays on ML and engineering.',
+    'Paymanshu Sharma is a Machine Learning Engineer in Bangalore, building agentic AI and voice systems. Portfolio with an interactive resume you can talk to — PDF, terminal, and voice — plus essays on ML and engineering.',
   url: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshus.github.io',
   locale: 'en_US',
   location: 'Bangalore, India',
