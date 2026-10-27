@@ -584,3 +584,22 @@ class TestKnowledge:
         from resume_context import KNOWLEDGE_MAX_CHARS, knowledge_lookup
         context, _ = knowledge_lookup("GPU optimization for LLMs")
         assert context and len(context) <= KNOWLEDGE_MAX_CHARS + 4
+
+
+class TestCookingOverview:
+    def test_follows_the_cooking_page_order(self, tmp_path):
+        from resume_context import cooking_overview
+        (tmp_path / "_order.txt").write_text("# comment\nbeta\n# hidden\nalpha\nmissing\n")
+        (tmp_path / "alpha.md").write_text("---\ntitle: Alpha\nsummary: First thing.\n---\nbody\n")
+        (tmp_path / "beta.md").write_text("---\ntitle: Beta\nsummary: Second thing.\n---\nbody\n")
+        (tmp_path / "hidden.md").write_text("---\ntitle: Hidden\n---\n")
+        text = cooking_overview(tmp_path)
+        assert text.index("**Beta**") < text.index("**Alpha**")
+        assert "Hidden" not in text
+
+    def test_working_on_questions_get_work_and_side_projects(self):
+        idx = get_resume_index()
+        for q in ["what are you working on", "what are you working on these days"]:
+            context, score = idx.search_scored(q, top_k=2)
+            assert score >= 2.5, (q, score)
+            assert "Summary]" in context and "Side projects in progress]" in context, q

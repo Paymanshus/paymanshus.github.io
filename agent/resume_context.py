@@ -97,6 +97,7 @@ class ContentIndex:
         section_tags: "dict[str, list[str]] | None" = None,
         query_synonyms: "dict[str, list[str]] | None" = None,
         stopwords: "frozenset[str] | None" = None,
+        extra_markdown: "list[tuple[str, str]] | None" = None,
     ):
         """Build the index from one or more markdown sources.
 
@@ -114,6 +115,9 @@ class ContentIndex:
                              A key starting with "#" matches the section's own heading
                              only, not its children: {"#Maersk": [...]} tags the role
                              header but not the project sections nested under it.
+            extra_markdown:  Optional (source_label, markdown) pairs indexed after the
+                             files, for sections generated at startup rather than
+                             read from disk (the /cooking overview).
             stopwords:       Optional query tokens to drop before scoring. Without them,
                              "what are you working on" ranks whichever section happens to
                              repeat "working on", not the one the question is about.
@@ -133,6 +137,8 @@ class ContentIndex:
         paths = self._resolve_paths(sources)
         for p in paths:
             self._parse_file(p)
+        for source, text in extra_markdown or []:
+            self._parse_text(text, source)
 
         self._build_bm25_index()
         logger.info(
@@ -182,6 +188,10 @@ class ContentIndex:
             title = meta.get("title") or path.stem
             intro = meta.get("summary") or meta.get("excerpt") or ""
             raw = f"# {title}\n{intro}\n{body}"
+        self._parse_text(raw, str(path))
+
+    def _parse_text(self, raw: str, source: str):
+        """Split markdown text into heading-delimited sections."""
         self.full_text += raw + "\n"
 
         lines = raw.split("\n")
@@ -212,7 +222,7 @@ class ContentIndex:
                     heading=heading,
                     level=level,
                     content=content,
-                    source_file=str(path),
+                    source_file=source,
                     tokens=tokens,
                 ))
 
@@ -368,6 +378,8 @@ RESUME_SECTION_TAGS: dict[str, list[str]] = {
     "Shipment CoCaptain":  ["cocaptain", "copilot", "insights", "finance",
                             "agent", "agentic"],
     "Patent":       ["patent", "patented", "invention", "ip"],
+    "#Side projects": ["working", "building", "currently", "cooking", "stove",
+                       "weekends", "outside"],
     "AI-first org": ["leadership", "hiring", "fde", "workshop", "strategy"],
     "Hike":         ["voice", "bot", "call", "phone", "sip", "outreach"],
     "Mphasis":      ["research", "lab", "enterprise", "sagemaker", "marketplace"],
@@ -389,6 +401,7 @@ QUERY_STOPWORDS: frozenset[str] = frozenset("""
     have has had having not no yes just really very also tell give show please
     any some anything something all more most much many lot bit kind sort like
     hey hi hello ok okay um uh well then than too let lets get got go going
+    day days per
 """.split())
 
 RESUME_QUERY_SYNONYMS: dict[str, list[str]] = {
@@ -402,6 +415,8 @@ RESUME_QUERY_SYNONYMS: dict[str, list[str]] = {
     "cv":       ["computer", "vision"],
     "p2r":      ["pay", "release"],
     "captain":  ["cocaptain"],
+    "working":  ["currently"],
+    "building": ["currently"],
     "dl":       ["deep", "learning"],
 }
 
@@ -452,6 +467,32 @@ def resolve_resume_dump_path(here: Path | None = None) -> Path:
     )
 
 
+def cooking_overview(cooking_dir: Path) -> str:
+    """A "## Side projects in progress" section from content/cooking, one line
+    per project in the /cooking page's order (_order.txt, top = latest), so
+    "what are you working on" can cover side projects as well as work.
+    Generated at startup, so it never drifts from the page. "" when missing."""
+    order_file = cooking_dir / "_order.txt"
+    if not order_file.exists():
+        return ""
+    lines = []
+    for slug in order_file.read_text(encoding="utf-8").splitlines():
+        slug = slug.strip()
+        path = cooking_dir / f"{slug}.md"
+        if not slug or slug.startswith("#") or not path.exists():
+            continue
+        meta, _ = _split_front_matter(path.read_text(encoding="utf-8"))
+        title, summary = meta.get("title") or slug, meta.get("summary", "")
+        lines.append(f"- **{title}**: {summary}".rstrip(": "))
+    if not lines:
+        return ""
+    return (
+        "## Side projects in progress\n\n"
+        "Personal projects on the /cooking page of this site, most recent first:\n\n"
+        + "\n".join(lines) + "\n"
+    )
+
+
 def get_resume_index() -> ContentIndex:
     """Get (or create) the resume-only index singleton.
 
@@ -462,12 +503,14 @@ def get_resume_index() -> ContentIndex:
     """
     if "resume" not in _indices:
         resume_path = resolve_resume_dump_path()
+        overview = cooking_overview(resume_path.parent / "cooking")
         _indices["resume"] = ContentIndex(
             str(resume_path),
             label="resume",
             section_tags=RESUME_SECTION_TAGS,
             query_synonyms=RESUME_QUERY_SYNONYMS,
             stopwords=QUERY_STOPWORDS,
+            extra_markdown=[("content/cooking", overview)] if overview else None,
         )
     return _indices["resume"]
 

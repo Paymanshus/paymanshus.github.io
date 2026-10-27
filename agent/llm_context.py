@@ -181,7 +181,12 @@ def build(
     else:  # bm25_system
         system = persona_body + RESUME_BLOCK.format(context=bm25_text)
 
-    if mode in ("full_hint", "persona_bm25_user"):
+    # A zero score means BM25 matched nothing and handed back the full resume
+    # as its fallback; in full_hint the system prompt already carries it, so
+    # repeating it in the user turn would double the request for no gain.
+    if mode == "full_hint" and bm25_score == 0.0:
+        user_text = question
+    elif mode in ("full_hint", "persona_bm25_user"):
         user_text = HINT_BLOCK.format(context=bm25_text, question=question)
     else:
         user_text = question

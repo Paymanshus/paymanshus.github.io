@@ -371,6 +371,12 @@ async def test_knowledge_goes_in_the_user_turn_not_the_prefix():
     assert c.turns[-1]["text"].startswith(plain.turns[-1]["text"])
 
 
+async def test_no_match_does_not_repeat_the_resume_in_the_user_turn():
+    c = build("are you happy?", "full_hint")
+    assert c.bm25_score == 0.0
+    assert c.turns[-1]["text"] == "are you happy?"
+
+
 async def test_bm25_still_runs_in_hint_mode():
     """BM25 must stay exercised — it's kept deliberately for later scaling work,
     not just as legacy."""

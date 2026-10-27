@@ -71,6 +71,7 @@ Two main bodies of work: payments document AI in production, and Shipment CoCapt
 - Developed a chatbot for contact-centre agent assistance using **prompt engineering and chaining** with GPT-3.5, Whisper for STT and open-source TTS, also giving agents performance feedback.
 - Deployed 5+ projects in anomaly detection, multi-modal learning and NLP via SageMaker, listed on the AWS Marketplace after **containerization**.
 - Created a Streamlit dashboard for anomaly detection, analysis and monitoring, with LIME and SHAP-based **explainability**.
+- Applied Guided LDA models to detect prominent aspects in Amazon product reviews, fine-tuned in a semi-supervised approach.
 
 ---
 
@@ -78,14 +79,15 @@ Two main bodies of work: payments document AI in production, and Shipment CoCapt
 **June 2021 – September 2021 | Remote (Mumbai, India)**
 
 - Formulated algorithms to estimate HR, RR, SpO2 and other **physiological parameters** from smartphone face and fingertip videos, for a low-cost at-home health-check app, under Prof. K. V. Venkatesh.
-- Improved **PPG signal quality** with smoothing, dynamic peak detection (OpenCV, dlib, SciPy) and a signal-quality validation pipeline, achieving a **55% improvement** in MAE with reproducible, device-agnostic results.
+- Improved **PPG signal quality** by testing signal processing, smoothing and dynamic peak detection algorithms (OpenCV, dlib, SciPy) on manually collected test data, for reproducible, device-agnostic results.
+- Implemented an image processing and signal-quality validation pipeline, achieving a **55% improvement** in MAE after classical and ML experiments.
 
 ---
 
 ### Amicus.ai — *Founding Team Member and Data Scientist*
 **February 2021 – June 2021 | Remote (Mumbai, India)**
 
-- Built v1 of a **legaltech** NLP product bringing NLP to legal case analysis: BERT **named entity recognition (NER)** models and rule-based extraction over unstructured legal text from 100,000+ case files.
+- Built v1 of a **legaltech** product bringing NLP to legal case analysis: BERT **named entity recognition (NER)** models and regex rule-based extraction over scraped, unstructured, varied-format legal text from 100,000+ case files, covering over 70% of it.
 - Built interactive data visualizations on a Dash/Plotly web dashboard.
 
 ---
@@ -117,7 +119,7 @@ Two main bodies of work: payments document AI in production, and Shipment CoCapt
 **July 2019 – December 2019 | Mumbai, India**
 
 - Developed computer vision and speech assessment algorithms for an **interviewee video screening** platform used by college and corporate clients: speech cadence, tone and pitch analysis, gaze estimation, gesture recognition and multilingual transcription.
-- Tested on **200+ client clips** and incorporated into the primary codebase.
+- Benchmarked AWS and GCP APIs and added the best method to the main pipeline. Tested on **200+ client clips** and incorporated into the primary codebase.
 
 ---
 
@@ -143,6 +145,12 @@ A crime detection center prototype in Streamlit: face verification with Haar Cas
 
 **iKitchen Aid** | *Python, Flutter, TensorFlow/Keras, TensorFlow Lite*
 A Flutter app using YOLOv4 object detection to identify kitchen items, to help visually impaired people. Scraped, cleaned and tagged Google Images to build a training dataset of condiment images.
+
+**Song Analysis and Recommendation System** | *Python, scikit-learn, Flask, Spotify API*
+A content-based recommendation system built by evaluating similarity measures, with unsupervised clustering of song features and a method for user-specific playlist suggestions without listening history.
+
+**Effect of Gaming on Students** | *R, Excel*
+Ran a survey and hypothesis tests on the data to show trends between gaming and various aspects of a student's life.
 
 **Gaze Estimation and Saliency Prediction Pipeline to Study Visual Attention for E-Commerce Websites** *(Undergraduate Thesis)*
 
@@ -172,6 +180,8 @@ Presented an ML-enabled crop-detection app prototype for farmers; placed 1st at 
 
 **Engineering:** AWS, Azure, GCP, Docker, Microservices, CI/CD, FastAPI, PostgreSQL, Redis, Azure Service Bus, Prometheus, Grafana, Loki, React, Next.js, Git, Linux
 
+**Also used:** R, HTML, CSS, Deep Learning, Web Scraping, ETL, APIs, Tableau, Excel, Figma
+
 **Product and Delivery:** Stakeholder Discovery, Solution Scoping, PoC-to-Production, Executive Demos and Pitching, Spec-Driven Development, Rapid Prototyping
 
 ---
@@ -195,7 +205,7 @@ Data Structures & Algorithms • DBMS (SQL, MongoDB) • Statistics • Predicti
 ## Misc. Activities
 
 **Rotaract Club of Bombay Airport** | *July 2019 – July 2021*
-Initiated and led community projects, including the Open School program reaching 150+ underprivileged students, with national media coverage. Mentored teams in the Technology for Change program, including one building an Indian Sign Language translation app.
+Initiated and led community projects, including the Open School program reaching 150+ underprivileged students, with national media coverage (The Times of India, 92.7 Big FM). Mentored teams in the Technology for Change program, including one building an Indian Sign Language translation app.
 
 **Enactus** | *July 2019 – July 2020*
 On-field research and business venture conceptualization for community upliftment through social entrepreneurship.

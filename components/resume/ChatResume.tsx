@@ -59,7 +59,7 @@ const RESPONSES: Record<string, string[]> = {
     "Use the resume tab for the complete formal resume."
   ],
   contact: [
-    "EMAIL: paymanshus@gmail.com",
+    "EMAIL: paymanshu@gmail.com",
     "GITHUB: github.com/paymanshus",
     "LINKEDIN: linkedin.com/in/paymanshus"
   ]
