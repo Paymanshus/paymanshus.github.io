@@ -49,7 +49,7 @@ Microsoft's Phi-3-mini and Google's Gemma/Gemma 2 are popular open-source models
 
 Phi-3-Mini-4K-Instruct, the conversation-oriented version, with 3.8 billion parameters trained on 3.3 trillion tokens, contends with models up to 13 billion parameters. It demonstrates robust results in: language understanding, mathematical reasoning, code generation, long context handling, and logical reasoning. The model achieves a 70.9% score on the MMLU benchmark and excels in tasks such as the ARC Challenge and BoolQ, indicating strong reasoning and comprehension capabilities.
 
-Google's Gemma and Gemma 2, built on the same technology as proprietary Gemini models, offer three powerful and efficient models with 2, 9, and 27 billion parameter sizes. The Gemma models incorporate built-in safety advancements as well, and the Gemma 2.5B model is of particular interest due to in-built optimization for fast inference across diverse hardware.
+Google's Gemma and Gemma 2, built on the same technology as the proprietary Gemini models, span 2 to 27 billion parameters (Gemma 2 ships in 2, 9, and 27 billion sizes). The Gemma models incorporate built-in safety advancements as well, and the Gemma 2B model is of particular interest due to in-built optimization for fast inference across diverse hardware.
 
 Gemini Nano, a proprietary model, presents an alternative in the on-device model segment, offering API access for on-device setup without internet connectivity. Gemini Nano also provides functionalities beyond standard text generation, including: image understanding, speech transcription and text summarization. However, some multimodality-related options are available only on a restricted set of devices. Limited API access for developers has constrained experimentation with Gemini Nano models in the current project.
 
@@ -72,10 +72,10 @@ With the foundation of ONNX Runtime in place, we applied several optimization te
 
 ### Optimization Techniques
 
-The successful deployment of on-device AI requires careful optimization to balance performance with resource constraints. Various optimization techniques, from model compression to inference acceleration, allow complex AI models to run effectively on resource-constrained hardware such as mobile devices. The following key optimization strategies are implemented to achieve this balance:
+The successful deployment of on-device AI requires careful optimization to balance performance with resource constraints. Various optimization techniques, from model compression to inference acceleration, allow complex AI models to run effectively on resource-constrained hardware such as mobile devices. The following key optimization strategies are implemented to achieve this balance, backed by Microsoft's published results for Phi-3-mini:
 
-- **Quantization Techniques**: The implementation of 4-bit block quantization across mobile and web models achieved significant size reduction, resulting in models more than 2.5 times smaller than the original PyTorch versions, while maintaining high accuracy levels.
-- **Runtime Libraries**: Performance benchmarks comparing ONNX Runtime Mobile and llama.cpp revealed distinct optimization approaches for efficient model execution. Testing on a Samsung Galaxy S21 demonstrated ONNX Runtime Mobile's superior performance in scenarios involving short prompts and token generation, with comparable performance levels in other use cases.
+- **Quantization Techniques**: 4-bit block quantization. Microsoft's ONNX Runtime team reports that its 4-bit block-quantized Phi-3-mini builds for mobile and web are more than 2.5 times smaller than the original PyTorch version while maintaining high accuracy ([Microsoft, "Enjoy the power of Phi-3 with ONNX Runtime on your device"](https://huggingface.co/blog/Emma-N/enjoy-the-power-of-phi-3-with-onnx-runtime)).
+- **Runtime Libraries**: ONNX Runtime Mobile over llama.cpp. In the same Microsoft benchmarks on a Samsung Galaxy S21, ONNX Runtime Mobile beat llama.cpp with short prompts and few tokens to generate, and was comparable in other cases.
 
 ## Demo 1: A Portable Document Intelligence App
 
