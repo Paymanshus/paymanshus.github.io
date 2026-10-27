@@ -49,7 +49,7 @@ Microsoft's Phi-3-mini and Google's Gemma/Gemma 2 are popular open-source models
 
 Phi-3-Mini-4K-Instruct, the conversation-oriented version, with 3.8 billion parameters trained on 3.3 trillion tokens, contends with models up to 13 billion parameters. It demonstrates robust results in: language understanding, mathematical reasoning, code generation, long context handling, and logical reasoning. The model achieves a 70.9% score on the MMLU benchmark and excels in tasks such as the ARC Challenge and BoolQ, indicating strong reasoning and comprehension capabilities.
 
-Google's Gemma and Gemma 2, built on the same technology as proprietary Gemini models, offer three powerful and efficient models with 2, 9, and 27 billion parameter sizes. The Gemma models incorporate built-in safety advancements as well, and the Gemma 2.5B model is of particular interest due to in-built optimization for fast inference across diverse hardware.
+Google's Gemma and Gemma 2, built on the same technology as the proprietary Gemini models, span 2 to 27 billion parameters (Gemma 2 ships in 2, 9, and 27 billion sizes). The Gemma models incorporate built-in safety advancements as well, and the Gemma 2B model is of particular interest due to in-built optimization for fast inference across diverse hardware.
 
 Gemini Nano, a proprietary model, presents an alternative in the on-device model segment, offering API access for on-device setup without internet connectivity. Gemini Nano also provides functionalities beyond standard text generation, including: image understanding, speech transcription and text summarization. However, some multimodality-related options are available only on a restricted set of devices. Limited API access for developers has constrained experimentation with Gemini Nano models in the current project.
 
@@ -72,10 +72,10 @@ With the foundation of ONNX Runtime in place, we applied several optimization te
 
 ### Optimization Techniques
 
-The successful deployment of on-device AI requires careful optimization to balance performance with resource constraints. Various optimization techniques, from model compression to inference acceleration, allow complex AI models to run effectively on resource-constrained hardware such as mobile devices. The following key optimization strategies are implemented to achieve this balance:
+The successful deployment of on-device AI requires careful optimization to balance performance with resource constraints. Various optimization techniques, from model compression to inference acceleration, allow complex AI models to run effectively on resource-constrained hardware such as mobile devices. The following key optimization strategies are implemented to achieve this balance, backed by Microsoft's published results for Phi-3-mini:
 
-- **Quantization Techniques**: The implementation of 4-bit block quantization across mobile and web models achieved significant size reduction, resulting in models more than 2.5 times smaller than the original PyTorch versions, while maintaining high accuracy levels.
-- **Runtime Libraries**: Performance benchmarks comparing ONNX Runtime Mobile and llama.cpp revealed distinct optimization approaches for efficient model execution. Testing on a Samsung Galaxy S21 demonstrated ONNX Runtime Mobile's superior performance in scenarios involving short prompts and token generation, with comparable performance levels in other use cases.
+- **Quantization Techniques**: 4-bit block quantization. Microsoft's ONNX Runtime team reports that its 4-bit block-quantized Phi-3-mini builds for mobile and web are more than 2.5 times smaller than the original PyTorch version while maintaining high accuracy ([Microsoft, "Enjoy the power of Phi-3 with ONNX Runtime on your device"](https://huggingface.co/blog/Emma-N/enjoy-the-power-of-phi-3-with-onnx-runtime)).
+- **Runtime Libraries**: ONNX Runtime Mobile over llama.cpp. In the same Microsoft benchmarks on a Samsung Galaxy S21, ONNX Runtime Mobile beat llama.cpp with short prompts and few tokens to generate, and was comparable in other cases.
 
 ## Demo 1: A Portable Document Intelligence App
 
@@ -118,3 +118,20 @@ This approach maximizes functionality by improving customization options without
 ## Conclusion
 
 The two demonstrations showcase the remarkable performance and versatility achievable with on-device LLMs. By repurposing existing LLM solutions for resource-constrained devices, these applications expand the possibilities for on-device intelligence. The improved usability, convenience, and privacy offered by this setup cater to an expanded audience, paving the way for broader adoption of on-device AI across various sectors.
+
+## References
+
+1. Marah Abdin et al., [Phi-3 Technical Report: A Highly Capable Language Model Locally on Your Phone](https://arxiv.org/abs/2404.14219) — Microsoft
+2. [microsoft/Phi-3-mini-4k-instruct model card](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct) — Hugging Face
+3. [Enjoy the power of Phi-3 with ONNX Runtime on your device](https://huggingface.co/blog/Emma-N/enjoy-the-power-of-phi-3-with-onnx-runtime) — Microsoft ONNX Runtime team
+4. Gemma Team, [Gemma 2: Improving Open Language Models at a Practical Size](https://arxiv.org/abs/2408.00118) — Google DeepMind
+5. [Gemma models overview](https://ai.google.dev/gemma/docs) — Google AI for Developers
+6. [Gemini Nano](https://developer.android.com/ai/gemini-nano) — Android Developers
+7. [Open LLM Leaderboard](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard) — Hugging Face
+8. [ONNX Runtime](https://onnxruntime.ai/docs/) — documentation
+9. [ggerganov/llama.cpp: LLM inference in C/C++](https://github.com/ggerganov/llama.cpp)
+10. [Text recognition v2](https://developers.google.com/ml-kit/vision/text-recognition/v2) — Google ML Kit
+11. Daniel Cer et al., [Universal Sentence Encoder](https://arxiv.org/abs/1803.11175)
+12. [ObjectBox on-device vector database](https://objectbox.io/)
+13. [LLM Inference guide for Android](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference/android) — MediaPipe
+14. Edward J. Hu et al., [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685)

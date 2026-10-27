@@ -71,7 +71,7 @@ test('authored posts are dated to 2024 and flag their age', () => {
     assert.match(String(post.data.date), /^2024-/, `${post.slug} should carry its original 2024 date`);
     assert.match(
       post.content,
-      /^_Written in [^\n]*2024/m,
+      /^_(Written|Researched) in [^\n]*2024/m,
       `${post.slug} should open with an italic note marking it as dated`,
     );
   }

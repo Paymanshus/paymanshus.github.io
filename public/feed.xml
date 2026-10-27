@@ -5,20 +5,20 @@
     <link>https://paymanshus.github.io/thoughts/</link>
     <description>Essays on machine learning, agents, and engineering by Paymanshu Sharma.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 19 Aug 2026 17:53:22 GMT</lastBuildDate>
+    <lastBuildDate>Tue, 27 Oct 2026 21:35:27 GMT</lastBuildDate>
     <atom:link href="https://paymanshus.github.io/feed.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>Large Language Model Optimization: Memory, GPU, and CPU</title>
+      <title>Fitting Really Big Models into Not-So-Big GPUs: Precision and Quantization</title>
       <link>https://paymanshus.github.io/thoughts/llm-optimization-memory-gpu-cpu/</link>
       <guid isPermaLink="true">https://paymanshus.github.io/thoughts/llm-optimization-memory-gpu-cpu/</guid>
       <pubDate>Sat, 14 Dec 2024 00:00:00 GMT</pubDate>
-      <description>A practical tour of LLM deployment optimization across three dimensions — precision formats and quantization for memory, batching and KV caching for GPU, and IPEX and llama.cpp for CPU.</description>
+      <description>How much GPU memory a model actually needs and how to cut it down — fp32, fp16 and bf16, what quantization trades away, LLM.int8() and bitsandbytes in practice, and the KV cache that grows on top of the weights.</description>
       <category>llm optimization</category>
       <category>quantization</category>
       <category>precision</category>
       <category>kv cache</category>
+      <category>vram</category>
       <category>inference</category>
-      <category>gpu</category>
     </item>
     <item>
       <title>On-Device Large Language Models on Android</title>
