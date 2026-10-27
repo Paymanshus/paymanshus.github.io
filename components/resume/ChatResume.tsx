@@ -46,8 +46,8 @@ const RESPONSES: Record<string, string[]> = {
   ],
   experience: [
     "[CURRENT] Machine Learning Engineer @ Maersk",
-    "  - Building Shipment CoCaptain, an agentic AI shipment insights product",
-    "  - Shipping full-stack work across React, LangGraph, and evaluation systems",
+    "  - Payments document AI in production across 12+ countries (Pay to Release, Payapps)",
+    "  - Building Shipment CoCaptain, an agentic AI insights copilot",
     " ",
     "[PREVIOUS] Hike, Mphasis NEXT Labs, research-driven AI roles",
     "  - Voice agents, document AI, mobile IDP, and multimodal ML systems",

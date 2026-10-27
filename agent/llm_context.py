@@ -145,6 +145,7 @@ def build(
     mode: str | None = None,
     top_k: int = 3,
     max_chars: int = 500,
+    knowledge=None,
 ) -> BuiltContext:
     """Assemble the prompt for one request.
 
@@ -158,6 +159,10 @@ def build(
         mode:         One of MODES; defaults to `active_mode()`.
         top_k:        BM25 sections to retrieve.
         max_chars:    Per-turn text cap.
+        knowledge:    Optional callable(question) -> str, e.g.
+                      resume_context.knowledge_block. Its text (blog posts,
+                      side projects; usually "") is appended to the user turn,
+                      never the system prefix, so caching is unaffected.
     """
     mode = mode or active_mode()
     if mode not in MODES:
@@ -180,6 +185,8 @@ def build(
         user_text = HINT_BLOCK.format(context=bm25_text, question=question)
     else:
         user_text = question
+    if knowledge is not None:
+        user_text += knowledge(question)
 
     turns = _normalise_history(history, max_chars)
     turns.append({"role": "user", "text": user_text})

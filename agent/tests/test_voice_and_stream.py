@@ -279,6 +279,23 @@ async def test_context_goes_right_before_the_latest_question():
     assert info["source"] == "bm25-top2"
 
 
+async def test_knowledge_snippet_rides_along_with_the_resume_context():
+    session = _session_ctx(("user", "what is keypsake?"))
+    ctx, info = llm_voice.prepare_voice_ctx(
+        session, _Index(), 2.5, knowledge=lambda q: "\n\nKNOWLEDGE: " + q
+    )
+    texts = [(i.role, i.text_content) for i in ctx.items]
+    assert texts[-2] == ("assistant", llm_voice.CONTEXT_PREFIX + "FULL RESUME\n\nKNOWLEDGE: what is keypsake?")
+    assert info["source"] == "full-resume+knowledge"
+
+
+async def test_no_knowledge_hit_adds_nothing():
+    session = _session_ctx(("user", "what do you do at maersk?"))
+    ctx, info = llm_voice.prepare_voice_ctx(session, _Index(), 2.5, knowledge=lambda q: "")
+    assert ctx.items[-2].text_content == llm_voice.CONTEXT_PREFIX + "BM25: what do you do at maersk?"
+    assert info["source"] == "bm25-top2"
+
+
 async def test_session_history_is_never_modified():
     """LiveKit compares the preemptive context with the end-of-turn one; any
     change to the session's own context invalidates the early start."""

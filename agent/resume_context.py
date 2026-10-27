@@ -53,6 +53,28 @@ class Section:
     tokens: list[str] = field(default_factory=list)
 
 
+def _split_front_matter(raw: str) -> "tuple[dict[str, str], str]":
+    """Top-level `key: value` pairs from a leading --- block, and the body.
+
+    Deliberately not a YAML parser: only scalar fields are read (title,
+    summary, excerpt, published); lists and nested blocks are ignored.
+    """
+    if not raw.startswith("---"):
+        return {}, raw
+    lines = raw.split("\n")
+    for end in range(1, len(lines)):
+        if re.match(r"^---\s*$", lines[end]):
+            break
+    else:
+        return {}, raw
+    meta: dict[str, str] = {}
+    for line in lines[1:end]:
+        m = re.match(r"^([A-Za-z_][\w-]*):\s*(.*?)\s*$", line)
+        if m and m.group(2):
+            meta[m.group(1)] = m.group(2).strip("\"'")
+    return meta, "\n".join(lines[end + 1:])
+
+
 class ContentIndex:
     """In-memory BM25 index over one or more markdown files.
 
@@ -74,6 +96,7 @@ class ContentIndex:
         label: str = "content",
         section_tags: "dict[str, list[str]] | None" = None,
         query_synonyms: "dict[str, list[str]] | None" = None,
+        stopwords: "frozenset[str] | None" = None,
     ):
         """Build the index from one or more markdown sources.
 
@@ -88,6 +111,12 @@ class ContentIndex:
             query_synonyms:  Optional mapping of token → expanded tokens applied to the
                              query at search time. Fixes abbreviation and vocabulary gaps.
                              Example: {"college": ["education", "university"]}
+                             A key starting with "#" matches the section's own heading
+                             only, not its children: {"#Maersk": [...]} tags the role
+                             header but not the project sections nested under it.
+            stopwords:       Optional query tokens to drop before scoring. Without them,
+                             "what are you working on" ranks whichever section happens to
+                             repeat "working on", not the one the question is about.
 
         Raises:
             FileNotFoundError: If any specified file doesn't exist.
@@ -99,6 +128,7 @@ class ContentIndex:
         self._avg_dl: float = 0.0
         self._section_tags: dict[str, list[str]] = section_tags or {}
         self._query_synonyms: dict[str, list[str]] = query_synonyms or {}
+        self._stopwords: frozenset[str] = stopwords or frozenset()
 
         paths = self._resolve_paths(sources)
         for p in paths:
@@ -119,7 +149,8 @@ class ContentIndex:
         for s in sources:
             p = Path(s)
             if p.is_dir():
-                paths.extend(sorted(p.glob("*.md")))
+                # "_template.md" and friends are scaffolding, not content.
+                paths.extend(q for q in sorted(p.glob("*.md")) if not q.name.startswith("_"))
             else:
                 if not p.exists():
                     raise FileNotFoundError(f"Content file not found: {p}")
@@ -136,8 +167,21 @@ class ContentIndex:
         return re.findall(r'\b[a-z0-9]+(?:[\.\-][a-z0-9]+)*\b', text.lower())
 
     def _parse_file(self, path: Path):
-        """Parse one markdown file into sections and append to self.sections."""
+        """Parse one markdown file into sections and append to self.sections.
+
+        A file with YAML front matter (blog posts, /cooking projects) becomes a
+        "# title" heading with its summary/excerpt as the first line, so every
+        section carries the post's name in its path. `published: false` files
+        are skipped, matching what the site shows.
+        """
         raw = path.read_text(encoding="utf-8")
+        meta, body = _split_front_matter(raw)
+        if meta:
+            if meta.get("published", "").lower() == "false":
+                return
+            title = meta.get("title") or path.stem
+            intro = meta.get("summary") or meta.get("excerpt") or ""
+            raw = f"# {title}\n{intro}\n{body}"
         self.full_text += raw + "\n"
 
         lines = raw.split("\n")
@@ -157,7 +201,11 @@ class ContentIndex:
                 # Inject section anchor tags if any tag key matches this section's path.
                 # Tags extend the token bag at index time (single occurrence each).
                 for tag_key, tag_tokens in self._section_tags.items():
-                    if tag_key.lower() in path_str.lower():
+                    if tag_key.startswith("#"):
+                        hit = tag_key[1:].lower() in heading.lower()
+                    else:
+                        hit = tag_key.lower() in path_str.lower()
+                    if hit:
                         tokens.extend(tag_tokens)
                 self.sections.append(Section(
                     path=path_str,
@@ -169,7 +217,7 @@ class ContentIndex:
                 ))
 
         for line in lines:
-            m = re.match(r'^(#{1,3})\s+(.+)', line)
+            m = re.match(r'^(#{1,4})\s+(.+)', line)
             if m:
                 flush()
                 current_lines = []
@@ -229,8 +277,30 @@ class ContentIndex:
         separates "confident section hit" from "weak/incidental overlap".
         """
         start = time.perf_counter_ns()
+        top = self.search_sections(query, top_k=top_k)
+        elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000
+        top_score = top[0][0] if top else 0.0
+        logger.info(
+            f"[{self.label}] search: query='{query}' → "
+            f"top {len(top)} returned, top_score={top_score:.2f}, latency={elapsed_ms:.2f}ms"
+        )
 
-        query_tokens = self._tokenize(query)
+        if not top:
+            logger.info(f"[{self.label}] No matches, returning full text as fallback")
+            return self.full_text, 0.0
+
+        context = "\n\n---\n\n".join(
+            f"[{s.path}]\n{s.content}" for _, s in top
+        )
+        return context, top_score
+
+    def query_tokens(self, query: str) -> list[str]:
+        """The query's tokens minus stopwords (synonyms are added at search time)."""
+        return [t for t in self._tokenize(query) if t not in self._stopwords]
+
+    def search_sections(self, query: str, top_k: int = 3) -> "list[tuple[float, Section]]":
+        """BM25-ranked (score, section) pairs with a positive score, best first."""
+        query_tokens = self.query_tokens(query)
 
         # Expand query tokens with configured synonyms (query-side vocabulary fix).
         # E.g. "college" → also scores against "education", "university".
@@ -242,8 +312,7 @@ class ContentIndex:
             query_tokens = expanded
 
         if not query_tokens:
-            logger.warning(f"[{self.label}] Empty query, returning full text as fallback")
-            return self.full_text, 0.0
+            return []
 
         k1, b = 1.5, 0.75
         scores: list[tuple[float, Section]] = []
@@ -262,23 +331,7 @@ class ContentIndex:
                 scores.append((score, section))
 
         scores.sort(key=lambda x: x[0], reverse=True)
-        top = scores[:top_k]
-
-        elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000
-        top_score = top[0][0] if top else 0.0
-        logger.info(
-            f"[{self.label}] search: query='{query}' → {len(scores)} hits, "
-            f"top {len(top)} returned, top_score={top_score:.2f}, latency={elapsed_ms:.2f}ms"
-        )
-
-        if not top:
-            logger.info(f"[{self.label}] No matches, returning full text as fallback")
-            return self.full_text, 0.0
-
-        context = "\n\n---\n\n".join(
-            f"[{s.path}]\n{s.content}" for _, s in top
-        )
-        return context, top_score
+        return scores[:top_k]
 
     def get_section_paths(self) -> list[str]:
         """Return all section paths (for debugging/testing)."""
@@ -301,7 +354,21 @@ RESUME_SECTION_TAGS: dict[str, list[str]] = {
     "Education":    ["college", "university", "studied", "degree", "school",
                      "bachelor", "undergrad", "grad"],
     "Experience":   ["job", "work", "role", "career", "employer", "company"],
-    "Maersk":       ["current", "recent", "latest", "now", "today", "agentic"],
+    # Broad "what do you do / tell me about yourself" questions land on the
+    # Summary, which names every current track, instead of on whichever Maersk
+    # project happens to share a word with the question.
+    "Summary":      ["yourself", "about", "do", "doing", "overview", "intro",
+                     "introduce", "who", "currently", "nowadays", "background",
+                     "working", "lately", "recently"],
+    # The role header names both current tracks, so "current role" lands there
+    # rather than on one project. "#" = this heading only, not its children.
+    "#Maersk":      ["current", "recent", "latest", "now", "today", "role"],
+    "Payments automation": ["p2r", "payment", "payments", "invoices", "ocr",
+                            "scale", "production", "reliability"],
+    "Shipment CoCaptain":  ["cocaptain", "copilot", "insights", "finance",
+                            "agent", "agentic"],
+    "Patent":       ["patent", "patented", "invention", "ip"],
+    "AI-first org": ["leadership", "hiring", "fde", "workshop", "strategy"],
     "Hike":         ["voice", "bot", "call", "phone", "sip", "outreach"],
     "Mphasis":      ["research", "lab", "enterprise", "sagemaker", "marketplace"],
     "Skills":       ["know", "familiar", "technologies", "stack", "tools", "tech"],
@@ -312,6 +379,18 @@ RESUME_SECTION_TAGS: dict[str, list[str]] = {
     "Misc":         ["volunteer", "community", "social", "club", "extracurricular"],
 }
 
+# Function words that carry no topic. "do", "who" and "about" are kept on
+# purpose: the Summary is tagged with them so broad questions find it.
+QUERY_STOPWORDS: frozenset[str] = frozenset("""
+    a an the and or but if so of to in on at by for from with as into onto
+    is are was were be been being am i me my mine you your yours we our us
+    it its this that these those there here what which whom whose when where
+    why how can could would should will shall may might must does did done
+    have has had having not no yes just really very also tell give show please
+    any some anything something all more most much many lot bit kind sort like
+    hey hi hello ok okay um uh well then than too let lets get got go going
+""".split())
+
 RESUME_QUERY_SYNONYMS: dict[str, list[str]] = {
     "college":  ["education", "university"],
     "school":   ["education"],
@@ -321,6 +400,8 @@ RESUME_QUERY_SYNONYMS: dict[str, list[str]] = {
     "ai":       ["artificial", "intelligence"],
     "llm":      ["language", "model"],
     "cv":       ["computer", "vision"],
+    "p2r":      ["pay", "release"],
+    "captain":  ["cocaptain"],
     "dl":       ["deep", "learning"],
 }
 
@@ -386,9 +467,105 @@ def get_resume_index() -> ContentIndex:
             label="resume",
             section_tags=RESUME_SECTION_TAGS,
             query_synonyms=RESUME_QUERY_SYNONYMS,
+            stopwords=QUERY_STOPWORDS,
         )
     return _indices["resume"]
 
 
 # Convenience alias used by tests that import ResumeIndex by name
 ResumeIndex = ContentIndex
+
+
+# ─── Knowledge index (own writing, side projects) ──────────────────
+# Blog posts, /cooking projects and content/about/*.md (notes in the owner's
+# own words). Searched separately from the resume and used only on a strong
+# match, so it answers "tell me about keypsake" or "how does quantization
+# save memory" without ever crowding out the resume on ordinary questions.
+
+KNOWLEDGE_SUBDIRS = ("blog", "cooking", "about")
+
+# BM25 here runs over a different corpus than the resume, so its scores are
+# on their own scale. Calibrated in tests/test_resume_context.py: topic
+# questions ("what is keypsake", "on-device LLMs on android") clear it;
+# resume questions and small talk don't.
+KNOWLEDGE_SCORE_THRESHOLD = float(os.environ.get("KNOWLEDGE_SCORE_THRESHOLD", "6.0"))
+# Lower bar when the question names the post or project itself ("what is
+# keypsake"): one rare word scores ~5, but naming the title is unambiguous.
+KNOWLEDGE_NAMED_THRESHOLD = 3.0
+
+# On top of QUERY_STOPWORDS: words that are fine resume signals but say
+# nothing about which post or project a question is about.
+KNOWLEDGE_STOPWORDS: frozenset[str] = QUERY_STOPWORDS | frozenset("""
+    do who about you yourself work worked working job role build built make
+    made use used using think know project projects thing things stuff
+    experience company current currently now
+""".split())
+
+# A knowledge hit is a supplement, so it is capped: one section, trimmed.
+KNOWLEDGE_MAX_CHARS = 1200
+
+
+def content_dir_candidates(here: Path | None = None) -> list[Path]:
+    """Where content/ lives: KNOWLEDGE_CONTENT_DIR, then next to this file
+    (Docker, /app/content), then the repo root (local)."""
+    here = (here or Path(__file__).resolve().parent)
+    ordered: list[Path] = []
+    env = os.environ.get("KNOWLEDGE_CONTENT_DIR", "").strip()
+    if env:
+        ordered.append(Path(env))
+    ordered += [here / "content", here.parent / "content"]
+    return ordered
+
+
+def get_knowledge_index() -> "ContentIndex | None":
+    """The knowledge index singleton, or None when there is nothing to index
+    (a deploy without content/blog etc. must still answer from the resume)."""
+    if "knowledge" not in _indices:
+        sources: list[str] = []
+        for base in content_dir_candidates():
+            dirs = [base / d for d in KNOWLEDGE_SUBDIRS if (base / d).is_dir()]
+            if dirs:
+                sources = [str(d) for d in dirs]
+                break
+        index = None
+        if sources:
+            index = ContentIndex(sources, label="knowledge", stopwords=KNOWLEDGE_STOPWORDS)
+            if not index.sections:
+                index = None
+        _indices["knowledge"] = index
+    return _indices["knowledge"]
+
+
+def knowledge_lookup(query: str, threshold: float | None = None) -> "tuple[str, float]":
+    """The single best knowledge section for `query` if it clears the
+    threshold, else ("", score). Never falls back to full text."""
+    index = get_knowledge_index()
+    if index is None:
+        return "", 0.0
+    threshold = KNOWLEDGE_SCORE_THRESHOLD if threshold is None else threshold
+    top = index.search_sections(query, top_k=1)
+    if not top:
+        return "", 0.0
+    score, section = top[0]
+    title_tokens = set(index._tokenize(section.path.split(" > ")[0]))
+    named = bool(title_tokens & set(index.query_tokens(query)))
+    if score < threshold and not (named and score >= KNOWLEDGE_NAMED_THRESHOLD):
+        return "", score
+    context = f"[{section.path}]\n{section.content}"
+    if len(context) > KNOWLEDGE_MAX_CHARS:
+        context = context[:KNOWLEDGE_MAX_CHARS].rsplit(" ", 1)[0] + " ..."
+    return context, score
+
+
+# How a knowledge hit is shown to the model, in the terminal and on voice.
+# Framed as optional so a loosely related hit doesn't hijack the answer.
+KNOWLEDGE_BLOCK = (
+    "\n\nPossibly relevant, from my own blog posts and side projects (use it only "
+    "if the question is actually about this):\n{context}"
+)
+
+
+def knowledge_block(query: str) -> str:
+    """KNOWLEDGE_BLOCK for `query`, or "" when nothing clears the bar."""
+    context, _ = knowledge_lookup(query)
+    return KNOWLEDGE_BLOCK.format(context=context) if context else ""

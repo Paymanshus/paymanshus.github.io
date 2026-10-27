@@ -217,14 +217,16 @@ _TRIM_MARK = "(earlier part trimmed) ..."
 CONTEXT_PREFIX = "[Context for the next answer — internal, not spoken]\n"
 
 
-def prepare_voice_ctx(chat_ctx, index, threshold: float):
+def prepare_voice_ctx(chat_ctx, index, threshold: float, knowledge=None):
     """What a voice LLM call actually sends, built on a COPY of the session's
     chat context (returns (ctx, info) for logging):
 
       - every user message: STT word fixes (voice_lexicon) and the long-turn
         trim, so a misheard name or a ramble never reaches the model as-is;
       - resume context for the latest user message, inserted just before it:
-        BM25 top-2, or the full resume when BM25 isn't confident.
+        BM25 top-2, or the full resume when BM25 isn't confident, plus a
+        blog/side-project snippet when `knowledge(query)` returns one (it
+        clears a high bar, so usually nothing is added).
 
     Doing this per LLM call rather than in on_user_turn_completed is what keeps
     LiveKit's preemptive generation valid: it compares the chat context it
@@ -252,6 +254,9 @@ def prepare_voice_ctx(chat_ctx, index, threshold: float):
     source = "bm25-top2"
     if score < threshold:
         context, source = index.full_text, "full-resume"
+    if knowledge is not None and (extra := knowledge(query)):
+        context += extra
+        source += "+knowledge"
     items.insert(last_user, lk_llm.ChatMessage(role="assistant", content=[CONTEXT_PREFIX + context]))
     return ctx, {"score": score, "source": source, "chars": len(context), "query": query}
 
