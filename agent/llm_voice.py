@@ -50,6 +50,7 @@ from livekit.agents import APIConnectionError, APIStatusError
 from livekit.agents import llm as lk_llm
 from livekit.plugins import google
 
+import llm_context
 import llm_health
 import llm_models
 import llm_ladder
@@ -214,7 +215,7 @@ def trim_user_text(text: str, limit: int | None = None) -> str:
 _TRIM_MARK = "(earlier part trimmed) ..."
 
 
-CONTEXT_PREFIX = "[Context for the next answer — internal, not spoken]\n"
+CONTEXT_PREFIX = llm_context.VOICE_CONTEXT_PREFIX
 
 
 def prepare_voice_ctx(chat_ctx, index, threshold: float, knowledge=None):
@@ -250,15 +251,9 @@ def prepare_voice_ctx(chat_ctx, index, threshold: float, knowledge=None):
     if last_user is None:
         return ctx, {}
     query = items[last_user].text_content or ""
-    context, score = index.search_scored(query, top_k=2)
-    source = "bm25-top2"
-    if score < threshold:
-        context, source = index.full_text, "full-resume"
-    if knowledge is not None and (extra := knowledge(query)):
-        context += extra
-        source += "+knowledge"
+    context, info = llm_context.voice_context(query, index, threshold, knowledge)
     items.insert(last_user, lk_llm.ChatMessage(role="assistant", content=[CONTEXT_PREFIX + context]))
-    return ctx, {"score": score, "source": source, "chars": len(context), "query": query}
+    return ctx, info
 
 
 # Chat-template control tokens that some providers leak into the text stream

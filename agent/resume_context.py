@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 logger = logging.getLogger("resume-context")
 
 # An HTML comment in content markdown; group 1 is its text minus a "keywords:" label.
-_COMMENT_RE = re.compile(r"<!--\s*(?:keywords:)?(.*?)-->", re.S)
+_COMMENT_RE = re.compile(r"<!--\s*(?:keywords:)?(.*?)-->", re.DOTALL)
 
 
 @dataclass
@@ -54,6 +54,7 @@ class Section:
     content: str        # Full text content including bullets, etc.
     source_file: str    # Which file this came from (for future multi-source routing)
     tokens: list[str] = field(default_factory=list)
+    keywords: str = ""  # from a "<!-- keywords: ... -->" line; indexed, not shown
 
 
 def _split_front_matter(raw: str) -> "tuple[dict[str, str], str]":
@@ -231,6 +232,7 @@ class ContentIndex:
                     content=content,
                     source_file=source,
                     tokens=tokens,
+                    keywords=keywords,
                 ))
 
         for line in lines:
@@ -590,26 +592,33 @@ def get_knowledge_index() -> "ContentIndex | None":
     return _indices["knowledge"]
 
 
+def _clears_bar(index, query_tokens: set, score: float, section, threshold: float) -> bool:
+    if Path(section.source_file).parent.name == "about":
+        # Notes are short, so one common word ("pay", "honestly", "right")
+        # scores high against them. They count only when the question shares
+        # a word with the note's heading or keyword line.
+        anchors = set(index._tokenize(section.heading + " " + section.keywords))
+        return score >= min(threshold, KNOWLEDGE_NOTES_THRESHOLD) and bool(anchors & query_tokens)
+    title_tokens = set(index._tokenize(section.path.split(" > ")[0]))
+    named = bool(title_tokens & query_tokens)
+    return score >= threshold or (named and score >= KNOWLEDGE_NAMED_THRESHOLD)
+
+
 def knowledge_lookup(query: str, threshold: float | None = None) -> "tuple[str, float]":
-    """The single best knowledge section for `query` if it clears the
-    threshold, else ("", score). Never falls back to full text."""
+    """The best knowledge section (of the top 3) for `query` that clears its
+    bar, else ("", best score). Never falls back to full text."""
     index = get_knowledge_index()
     if index is None:
         return "", 0.0
     threshold = KNOWLEDGE_SCORE_THRESHOLD if threshold is None else threshold
-    top = index.search_sections(query, top_k=1)
+    top = index.search_sections(query, top_k=3)
     if not top:
         return "", 0.0
-    score, section = top[0]
-    if Path(section.source_file).parent.name == "about":
-        # Notes have their own bar, and their headings ("My views on AI and
-        # agents") are too generic to count as naming the post.
-        threshold, named = min(threshold, KNOWLEDGE_NOTES_THRESHOLD), False
-    else:
-        title_tokens = set(index._tokenize(section.path.split(" > ")[0]))
-        named = bool(title_tokens & set(index.query_tokens(query)))
-    if score < threshold and not (named and score >= KNOWLEDGE_NAMED_THRESHOLD):
-        return "", score
+    query_tokens = set(index.query_tokens(query))
+    hit = next(((sc, sec) for sc, sec in top if _clears_bar(index, query_tokens, sc, sec, threshold)), None)
+    if hit is None:
+        return "", top[0][0]
+    score, section = hit
     context = f"[{section.path}]\n{section.content}"
     if len(context) > KNOWLEDGE_MAX_CHARS:
         context = context[:KNOWLEDGE_MAX_CHARS].rsplit(" ", 1)[0] + " ..."

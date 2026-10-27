@@ -5,7 +5,7 @@
 Some days the vibes are immaculate. Some days they aren't. So if vibes are a spectrum, why look at vibe coding so binarily? Between straight hostility and unwavering worship, I try to hold the middle ground: get the best out of it, and be honest about where it struggles. I've used AI coding a lot at work and on side projects, and it can genuinely 10x your development. What I don't buy is the fake 100x promise that breaks the moment you leave a demo running five hardcoded examples. I'm sure even Karpathy didn't mean to start a mini war when he coined the term. Vibe coding should be personal: tune it to your vibe. Just maybe don't go all vibes, all the time (or do, idk, I'm not your manager).
 
 ## How I work with AI coding tools
-<!-- keywords: cursor claude ide readme documentation custom instructions coding agent tips workflow -->
+<!-- keywords: cursor claude ide readme documentation coding agent tips workflow -->
 One habit that's paid off: alongside the normal README, keep a detailed one that breaks down how every part of the app works. It's good documentation, sure, but it's even more useful for the next LLM session. Every time you spin up a new chat in whatever AI IDE you're on (which should ideally be a lot), there's a search fired off just to understand what's going on before it gets to what you actually asked. Specific code changes need specific searches, no two ways about that. But the overall understanding of how the app works can come from a ready reference. Bonus: have some custom instructions going too. And I don't treat my own prompts as gospel; I want the tool to make judgement calls.
 
 ## AI-built apps all look the same

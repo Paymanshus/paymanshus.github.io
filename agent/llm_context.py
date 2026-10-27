@@ -209,6 +209,28 @@ def build(
 # History goes AFTER the system message in both shapes, so a growing
 # conversation never perturbs the cacheable prefix.
 
+# Voice puts the per-turn context in an assistant message just before the
+# caller's turn (llm_voice.prepare_voice_ctx); this is its marker.
+VOICE_CONTEXT_PREFIX = "[Context for the next answer — internal, not spoken]\n"
+
+
+def voice_context(query: str, index, threshold: float, knowledge=None) -> tuple[str, dict]:
+    """The voice turn's context for `query`: BM25 top-2, or the full resume
+    when BM25 isn't confident, plus a notes/blog/project snippet when
+    `knowledge(query)` returns one. Returns (context, info for logging).
+
+    Plain Python, no LiveKit, so the eval harnesses build the same context the
+    voice agent does."""
+    context, score = index.search_scored(query, top_k=2)
+    source = "bm25-top2"
+    if score < threshold:
+        context, source = index.full_text, "full-resume"
+    if knowledge is not None and (extra := knowledge(query)):
+        context += extra
+        source += "+knowledge"
+    return context, {"score": score, "source": source, "chars": len(context), "query": query}
+
+
 def to_openai_messages(ctx: BuiltContext) -> list[dict]:
     """OpenAI / OpenRouter chat-completions `messages`."""
     messages = [{"role": "system", "content": ctx.system}]

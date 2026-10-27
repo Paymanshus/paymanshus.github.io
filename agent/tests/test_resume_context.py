@@ -597,6 +597,18 @@ class TestKnowledge:
             context, score = knowledge_lookup(q)
             assert context == "", f"unexpected knowledge hit for {q!r} ({score:.2f})"
 
+    def test_persona_bench_snippet_expectations(self):
+        """The free half of tests/eval_persona.py: every benchmark question gets
+        a notes/blog/project snippet exactly when its `notes` flag says so."""
+        import json
+        from pathlib import Path
+        from resume_context import knowledge_lookup
+        bench = Path(__file__).parent / "persona_bench.jsonl"
+        for line in bench.read_text().splitlines():
+            item = json.loads(line)
+            context, score = knowledge_lookup(item["q"])
+            assert bool(context) == item["notes"], (item["id"], round(score, 2), context[:60])
+
     def test_keyword_comments_are_indexed_but_not_shown(self, tmp_path):
         (tmp_path / "note.md").write_text("# Note\n## Pets\n<!-- keywords: zebra -->\nI like cats.\n")
         idx = ContentIndex(str(tmp_path))

@@ -1,8 +1,12 @@
 # Outside work
 
-## Board games, coffee, cooking and books
-<!-- keywords: hobbies hobby fun free time weekend weekends interests games cascadia viticulture five tribes coffee cooking reading books fiction metamorphosis audio headphones iems -->
-When I'm not building, I'm probably playing a strategy board game. Cascadia, Viticulture and Five Tribes are the ones I keep coming back to. I'm into brewing coffee, and I like cooking, mostly savory stuff. I also read fiction; I recently finished Kafka's The Metamorphosis and loved it. And I'm a bit of an audio nerd: open-back 560s at the desk and a few Chi-Fi IEMs.
+## Board games, coffee, cooking and audio gear
+<!-- keywords: hobbies hobby fun free time weekend weekends interests games cascadia viticulture five tribes coffee cooking audio headphones iems -->
+When I'm not building, I'm probably playing a strategy board game. Cascadia, Viticulture and Five Tribes are the ones I keep coming back to. I'm into brewing coffee, and I like cooking, mostly savory stuff. And I'm a bit of an audio nerd: open-back 560s at the desk and a few Chi-Fi IEMs.
+
+## Books
+<!-- keywords: reading read books book fiction novel kafka metamorphosis -->
+I read fiction. I recently finished Kafka's The Metamorphosis and loved it.
 
 ## 3D printing and DIY
 <!-- keywords: 3d printing printer diy maker raspberry pi lamp room decor hardware creality -->
