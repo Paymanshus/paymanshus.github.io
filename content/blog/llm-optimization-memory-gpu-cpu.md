@@ -220,3 +220,6 @@ Batching requests and managing this cache well is a serving problem in its own r
 5. Tim Dettmers et al., [LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale](https://arxiv.org/abs/2208.07339)
 6. Tim Dettmers et al., [QLoRA: Efficient Finetuning of Quantized LLMs](https://arxiv.org/abs/2305.14314)
 7. [Mastering LLM Techniques: Inference Optimization](https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/) — NVIDIA Developer Blog
+8. [Half-precision floating-point format — Wikipedia](https://en.wikipedia.org/wiki/Half-precision_floating-point_format)
+9. Hugo Touvron et al., [Llama 2: Open Foundation and Fine-Tuned Chat Models](https://arxiv.org/abs/2307.09288) — Meta
+10. [turboderp/exllamav2: a fast inference library for running LLMs locally](https://github.com/turboderp/exllamav2)

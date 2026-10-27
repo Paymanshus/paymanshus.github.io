@@ -118,3 +118,20 @@ This approach maximizes functionality by improving customization options without
 ## Conclusion
 
 The two demonstrations showcase the remarkable performance and versatility achievable with on-device LLMs. By repurposing existing LLM solutions for resource-constrained devices, these applications expand the possibilities for on-device intelligence. The improved usability, convenience, and privacy offered by this setup cater to an expanded audience, paving the way for broader adoption of on-device AI across various sectors.
+
+## References
+
+1. Marah Abdin et al., [Phi-3 Technical Report: A Highly Capable Language Model Locally on Your Phone](https://arxiv.org/abs/2404.14219) — Microsoft
+2. [microsoft/Phi-3-mini-4k-instruct model card](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct) — Hugging Face
+3. [Enjoy the power of Phi-3 with ONNX Runtime on your device](https://huggingface.co/blog/Emma-N/enjoy-the-power-of-phi-3-with-onnx-runtime) — Microsoft ONNX Runtime team
+4. Gemma Team, [Gemma 2: Improving Open Language Models at a Practical Size](https://arxiv.org/abs/2408.00118) — Google DeepMind
+5. [Gemma models overview](https://ai.google.dev/gemma/docs) — Google AI for Developers
+6. [Gemini Nano](https://developer.android.com/ai/gemini-nano) — Android Developers
+7. [Open LLM Leaderboard](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard) — Hugging Face
+8. [ONNX Runtime](https://onnxruntime.ai/docs/) — documentation
+9. [ggerganov/llama.cpp: LLM inference in C/C++](https://github.com/ggerganov/llama.cpp)
+10. [Text recognition v2](https://developers.google.com/ml-kit/vision/text-recognition/v2) — Google ML Kit
+11. Daniel Cer et al., [Universal Sentence Encoder](https://arxiv.org/abs/1803.11175)
+12. [ObjectBox on-device vector database](https://objectbox.io/)
+13. [LLM Inference guide for Android](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference/android) — MediaPipe
+14. Edward J. Hu et al., [LoRA: Low-Rank Adaptation of Large Language Models](https://arxiv.org/abs/2106.09685)
