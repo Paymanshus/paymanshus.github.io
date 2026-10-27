@@ -7,3 +7,8 @@ together with the blog posts and /cooking projects, and only uses a section when
 a visitor's question clearly matches it (see `knowledge_lookup` in
 `agent/resume_context.py`). This repo is public, so only add what you'd say on
 the site anyway.
+
+Each `## ` section can carry a `<!-- keywords: ... -->` line: indexed for
+retrieval, never shown to the model. Avoid very common words ("code", "stack")
+as keywords, or resume questions start pulling in notes. Source: the Notion page
+"Portfolio persona source" ([safe] items only).

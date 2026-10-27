@@ -41,6 +41,9 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger("resume-context")
 
+# An HTML comment in content markdown; group 1 is its text minus a "keywords:" label.
+_COMMENT_RE = re.compile(r"<!--\s*(?:keywords:)?(.*?)-->", re.S)
+
 
 @dataclass
 class Section:
@@ -200,6 +203,10 @@ class ContentIndex:
 
         def flush():
             content = "\n".join(current_lines).strip()
+            # "<!-- keywords: ... -->" lines (content/about notes) are indexed
+            # for recall but never shown to the model.
+            keywords = " ".join(_COMMENT_RE.findall(content))
+            content = _COMMENT_RE.sub("", content).strip()
             if content and heading_stack:
                 path_str = " > ".join(text for _, text in heading_stack)
                 heading = heading_stack[-1][1]
@@ -207,7 +214,7 @@ class ContentIndex:
                 # Score on content + heading only — not path_str.
                 # path_str is for LLM display; including it inflates parent-heading
                 # tokens (e.g. "AI" from a job title) and distorts BM25 ranking.
-                tokens = self._tokenize(content + " " + heading)
+                tokens = self._tokenize(content + " " + heading + " " + keywords)
                 # Inject section anchor tags if any tag key matches this section's path.
                 # Tags extend the token bag at index time (single occurrence each).
                 for tag_key, tag_tokens in self._section_tags.items():
@@ -535,6 +542,10 @@ KNOWLEDGE_SCORE_THRESHOLD = float(os.environ.get("KNOWLEDGE_SCORE_THRESHOLD", "6
 # Lower bar when the question names the post or project itself ("what is
 # keypsake"): one rare word scores ~5, but naming the title is unambiguous.
 KNOWLEDGE_NAMED_THRESHOLD = 3.0
+# content/about notes are short, curated and carry keyword comments, so a
+# plain "any hobbies?" (~4.8) should reach them; resume questions and small
+# talk stay under ~3.5 against them (see tests).
+KNOWLEDGE_NOTES_THRESHOLD = 4.0
 
 # On top of QUERY_STOPWORDS: words that are fine resume signals but say
 # nothing about which post or project a question is about.
@@ -590,8 +601,13 @@ def knowledge_lookup(query: str, threshold: float | None = None) -> "tuple[str, 
     if not top:
         return "", 0.0
     score, section = top[0]
-    title_tokens = set(index._tokenize(section.path.split(" > ")[0]))
-    named = bool(title_tokens & set(index.query_tokens(query)))
+    if Path(section.source_file).parent.name == "about":
+        # Notes have their own bar, and their headings ("My views on AI and
+        # agents") are too generic to count as naming the post.
+        threshold, named = min(threshold, KNOWLEDGE_NOTES_THRESHOLD), False
+    else:
+        title_tokens = set(index._tokenize(section.path.split(" > ")[0]))
+        named = bool(title_tokens & set(index.query_tokens(query)))
     if score < threshold and not (named and score >= KNOWLEDGE_NAMED_THRESHOLD):
         return "", score
     context = f"[{section.path}]\n{section.content}"
@@ -603,7 +619,7 @@ def knowledge_lookup(query: str, threshold: float | None = None) -> "tuple[str, 
 # How a knowledge hit is shown to the model, in the terminal and on voice.
 # Framed as optional so a loosely related hit doesn't hijack the answer.
 KNOWLEDGE_BLOCK = (
-    "\n\nPossibly relevant, from my own blog posts and side projects (use it only "
+    "\n\nPossibly relevant, from my own notes, blog posts and side projects (use it only "
     "if the question is actually about this):\n{context}"
 )
 

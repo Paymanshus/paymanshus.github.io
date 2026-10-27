@@ -573,6 +573,36 @@ class TestKnowledge:
             context, score = knowledge_lookup(q)
             assert context == "", f"unexpected knowledge hit for {q!r} ({score:.2f})"
 
+    def test_notes_answer_views_and_hobbies(self):
+        from resume_context import knowledge_lookup
+        for q, heading in [
+            ("what do you think about vibe coding", "Vibe coding is a spectrum"),
+            ("are agents overhyped?", "Do you really need an AI agent?"),
+            ("thoughts on voice AI", "Why voice is the next interface"),
+            ("how do you evaluate LLMs", "Evals and trust"),
+            ("any hobbies?", "Board games"),
+            ("what do you do for fun", "Board games"),
+            ("is AI going to take our jobs", "AI in 2025"),
+        ]:
+            context, _ = knowledge_lookup(q)
+            assert heading in context.split("\n")[0], (q, context[:80])
+
+    def test_notes_stay_out_of_resume_and_guardrail_questions(self):
+        from resume_context import knowledge_lookup
+        for q in [
+            "what are you working on", "tell me about P2R", "what tech stack do you use",
+            "how good are you at python", "are you open to new roles", "what's your salary",
+            "are you married", "why should we hire you", "tell me a joke", "how do you code",
+        ]:
+            context, score = knowledge_lookup(q)
+            assert context == "", f"unexpected knowledge hit for {q!r} ({score:.2f})"
+
+    def test_keyword_comments_are_indexed_but_not_shown(self, tmp_path):
+        (tmp_path / "note.md").write_text("# Note\n## Pets\n<!-- keywords: zebra -->\nI like cats.\n")
+        idx = ContentIndex(str(tmp_path))
+        score, section = idx.search_sections("zebra", top_k=1)[0]
+        assert score > 0 and section.content == "I like cats."
+
     def test_unpublished_posts_and_templates_are_skipped(self, tmp_path):
         (tmp_path / "live.md").write_text('---\ntitle: "Live Post"\n---\nZebra facts.\n')
         (tmp_path / "draft.md").write_text('---\ntitle: Draft\npublished: false\n---\nZebra drafts.\n')
