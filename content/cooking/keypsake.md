@@ -43,7 +43,7 @@ whatever was there before. Then the connection drops, the page reloads, or one p
 of the thing you spent 40 minutes writing. Gone.
 
 I got sick of losing my prompts, so I built the thing that keeps them. keypsake saves what you
-type into any text box, in any app, plus everything you copy. It's on Mac now and meant for
+type into any text box, in any app, plus your clipboard history. It's on Mac now and meant for
 Windows too, because nobody on any OS deserves to lose their words.
 
 - **Typed.** One entry per text box, with the app or website, its icon and the window title.
@@ -55,7 +55,7 @@ Windows too, because nobody on any OS deserves to lose their words.
   removed words struck through, plus a plain summary like "40 words added".
 - **Copied.** Clipboard history with the source app or site, so a careless paste can't take
   anything with it.
-- **keypstats.** Even if you never lose a word, it's fun to see how much you type, where, and
+- **keypstats.** Even if you never lose a word, it's a kick to see how much you type, where, and
   when you were most key-krazy, on a heat map by hour and weekday.
 
 I use it every day, and it has already saved me more retyping than I'd like to admit.

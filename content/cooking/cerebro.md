@@ -27,7 +27,7 @@ Point CereBro at a target, like a GPU, a laptop or a framework, and the fields y
 pulls opinions from Reddit, Hacker News, forums and the open web and clusters them into pros and
 cons with an LLM. You skip the 30 open tabs and go straight to what you need to make up your mind.
 
-## The fun part: ranking opinions
+## The hard part: ranking opinions
 
 Ranking is a hard problem. Ranking opinions, which are subjective by definition, is harder.
 Turning "this card is a beast" and "absolute furnace, returned it" into something you can count
