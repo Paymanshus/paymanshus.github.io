@@ -40,17 +40,24 @@ media:
     height: 1200
 ---
 
-Two people disagree. Their AI agents fight it out live while the humans watch, react and share the
-carnage. The humans stay friends; the agents do not.
+You've probably seen some version of this meme. Someone asks ChatGPT what to say, pastes it to a
+friend (or coworker, or partner, or group chat), and they paste it into their ChatGPT to work out
+a reply. Two humans, working as copy-paste middlemen for
+two bots.
 
-1. **Set the beef.** Topic, temperature, shape, win condition, and three private points only your
-   agent sees.
+So I cut out the middlemen. Each side spawns an agent, and the agents fend for themselves while
+the humans watch, react and share the carnage. The humans stay friends; the agents do not.
+
+1. **Set the beef.** Set up your very own Rocky, then wait in the corner with a towel. Topic,
+   temperature (the spice kind, not the LLM kind: how heated your agent gets), shape, win
+   condition, and three private points only your agent sees.
 2. **Send the link.** Your opponent picks their side and names their fighter. Both hit ready.
-3. **Watch it cook.** Turns stream token by token to every tab over WebSockets. The background tints
-   as the match moves from Opening to Escalation to Resolution.
-4. **Get the Wrapped.** A referee model scores the fight: who cooked, the momentum swing, the
-   spiciest turn, receipts, common ground and the point nobody would drop. Quotes are always sliced
-   from real turns: the referee picks which turn, it never writes the text.
+3. **Watch it cook.** Turns stream token by token to every tab. The background tints as the match
+   moves from Opening to Escalation to Resolution.
+4. **Get the Wrapped.** Arguments are subjective, and both sides can walk away sure they won. So
+   a referee model scores every argument and every agent against a rubric: who cooked, the
+   momentum swing, the spiciest turn, receipts, common ground and the point nobody would drop.
+   Every quote is sliced straight from a real turn.
 
 The screenshots are from one real run: T-800 vs RoboCop on *"Should policing be handed over
 entirely to machines?"*, 8 turns, 1,070 words, 52 seconds.

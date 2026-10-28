@@ -35,29 +35,36 @@ media:
     height: 1200
 ---
 
-**typed it? keyp it.** A small macOS app that saves what you type into any text box, in any app.
-For the 40-minute prompt that hit a connection error, the message that vanished when you went
-back to fix one word, the search you swore you'd run after this video.
+**typed it? keyp it.**
+
+Most work is a prompt now. Typing used to be short and surgical; now it's half an hour of
+paragraphs for a model, copied and pasted across five apps, with a clipboard that quietly eats
+whatever was there before. Then the connection drops, the page reloads, or one paste lands on top
+of the thing you spent 40 minutes writing. Gone.
+
+I got sick of losing my prompts, so I built the thing that keeps them. keypsake saves what you
+type into any text box, in any app, plus everything you copy. It's on Mac now and meant for
+Windows too, because nobody on any OS deserves to lose their words.
 
 - **Typed.** One entry per text box, with the app or website, its icon and the window title.
-  Only what you typed this time is kept, not text that was already there.
+  It keeps just what you typed this time.
 - **The moment it all went wrong.** As you write, keypsake keeps versions. If a box suddenly
   empties or loses most of its text, the version right before is saved, marked in amber and
   shown first.
 - **Changes anyone can read.** Any version against the one before: added words highlighted,
   removed words struck through, plus a plain summary like "40 words added".
-- **Copied.** Clipboard history with the source app or site.
-- **keypstats.** How much you typed and when, on a heat map by hour and weekday.
+- **Copied.** Clipboard history with the source app or site, so a careless paste can't take
+  anything with it.
+- **keypstats.** Even if you never lose a word, it's fun to see how much you type, where, and
+  when you were most key-krazy, on a heat map by hour and weekday.
+
+I use it every day, and it has already saved me more retyping than I'd like to admit.
 
 ## Privacy
 
-It's a keylogger you run on purpose. History is encrypted (AES-GCM) and stays on your Mac;
-nothing is sent anywhere. Password fields, password managers and concealed clipboard items are
-never recorded, and typed text is deleted after 7, 30, 90 or 365 days.
+It's a keylogger you run on purpose, so trust came first. History is encrypted (AES-GCM) and
+stays on your Mac; nothing is sent anywhere. Password fields, password managers and concealed
+clipboard items are never recorded, and typed text is deleted after 7, 30, 90 or 365 days.
 
-## How it works
-
-A global key monitor triggers reads of the focused text box through the Accessibility API.
-Where an app does not expose its text (Google Docs, some Electron apps, terminals), the text is
-rebuilt from keystrokes. A sudden large drop in length saves the version before it. Storage is
-SQLite with every text field sealed by CryptoKit.
+Don't take my word for it. Point your own coding agent at the repo and ask it: is this safe, and
+does my text go anywhere?
