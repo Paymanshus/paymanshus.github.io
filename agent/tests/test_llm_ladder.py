@@ -357,6 +357,26 @@ async def test_history_growth_does_not_disturb_the_prefix():
     assert len(llm_context.to_openai_messages(later)) == 4
 
 
+async def test_knowledge_goes_in_the_user_turn_not_the_prefix():
+    """A blog/project snippet varies per question, so it must never touch the
+    cacheable system prefix."""
+    from resume_context import knowledge_block
+    plain = build("what is keypsake?", "full_hint")
+    c = llm_context.build(
+        "what is keypsake?", [], persona_body=TERMINAL_PERSONA_BODY,
+        index=get_resume_index(), mode="full_hint", knowledge=knowledge_block,
+    )
+    assert c.system_sha256 == plain.system_sha256
+    assert "keypsake" in c.turns[-1]["text"].split("Question:", 1)[1]
+    assert c.turns[-1]["text"].startswith(plain.turns[-1]["text"])
+
+
+async def test_no_match_does_not_repeat_the_resume_in_the_user_turn():
+    c = build("are you happy?", "full_hint")
+    assert c.bm25_score == 0.0
+    assert c.turns[-1]["text"] == "are you happy?"
+
+
 async def test_bm25_still_runs_in_hint_mode():
     """BM25 must stay exercised — it's kept deliberately for later scaling work,
     not just as legacy."""

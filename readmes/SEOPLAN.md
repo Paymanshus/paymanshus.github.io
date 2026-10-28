@@ -24,7 +24,7 @@ in the planning session itself — they are marked DONE with what shipped.
     Bangalore, India (Apr 2025–present).
   - Education: B.Tech Data Science, MPSTME NMIMS Mumbai (2018–2022).
   - Links: github.com/Paymanshus, **linkedin.com/in/paymanshus** (note trailing `s`),
-    huggingface.co/paymanshus. Email: paymanshus@gmail.com.
+    huggingface.co/paymanshus. Email: paymanshu@gmail.com.
 
 ---
 

@@ -42,7 +42,7 @@ from livekit.agents import (
     tts as lk_tts,
 )
 from livekit.plugins import google, deepgram, cartesia, silero
-from resume_context import get_resume_index
+from resume_context import get_knowledge_index, get_resume_index, knowledge_block
 from token_server import create_token_app
 from observability import setup_voice_tracing, attach_usage_reporter
 import llm_models
@@ -191,7 +191,9 @@ class PaymanshuAgent(Agent):
         on_user_turn_completed any more: that made LiveKit throw away its
         preemptive generation on every turn. History doesn't accumulate resume
         copies, since the context exists only in the per-call copy."""
-        ctx, info = llm_voice.prepare_voice_ctx(chat_ctx, get_resume_index(), RESUME_SCORE_THRESHOLD)
+        ctx, info = llm_voice.prepare_voice_ctx(
+            chat_ctx, get_resume_index(), RESUME_SCORE_THRESHOLD, knowledge=knowledge_block
+        )
         if info:
             logger.info(
                 "context injection: score=%.2f source=%s chars=%d query=%r",
@@ -237,6 +239,7 @@ def prewarm(proc) -> None:
     per spawned job process, just not ahead of the first visitor.
     """
     get_resume_index()
+    get_knowledge_index()
     import httpcore  # noqa: F401
     from livekit.plugins import openai as _lk_openai  # noqa: F401
 

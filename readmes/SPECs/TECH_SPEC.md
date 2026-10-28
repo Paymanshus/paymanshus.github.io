@@ -623,15 +623,17 @@ Browser ←—WebRTC—→ LiveKit Cloud SFU ←—WebRTC—→ agent/main.py
 `resume_context.py` key components:
 - `ContentIndex` — generic BM25 index; accepts optional `section_tags` and `query_synonyms` params (doc-agnostic; resume config passed in, not hardcoded); each `Section` records `source_file` for future multi-source routing
 - Scoring tokens: `content + heading` only — `path_str` excluded to prevent heading-token inflation (e.g. `"AI"` from `"Awarathon — AI Intern"` path no longer distorts ranking)
-- `RESUME_SECTION_TAGS` — injected at index time; anchors conversational vocab to sections (`"college"` → Education, `"current"/"recent"` → Maersk)
+- `RESUME_SECTION_TAGS` — injected at index time; anchors conversational vocab to sections (`"college"` → Education, `"yourself"/"do"/"working"` → Summary, `"current"/"recent"` → the Maersk role header only). A key starting with `#` matches the section's own heading, not its children, so project sections under a role don't inherit the role's tags.
+- `QUERY_STOPWORDS` — function words dropped from queries before scoring, so "what are you working on" doesn't rank whichever section repeats "working on". `do`, `who` and `about` are kept: the Summary is tagged with them.
+- Headings `#` to `####` are sections. The Maersk role is split into `####` project sections (Payments automation, Shipment CoCaptain, Patent, KPI dashboard, AI-first org), so naming a project retrieves just that project, and broad questions land on `## Summary`, which names every current track.
 - `RESUME_QUERY_SYNONYMS` — expanded at query time; bridges abbreviation gaps (`"college"` → `["education", "university"]`, `"ml"` → `["machine", "learning"]`)
 - `get_resume_index()` — singleton over `content/resumedump.md` with resume-specific config. Path candidates (first existing wins): `RESUME_CONTENT_PATH`, `<agent-dir>/content/resumedump.md` (Docker `/app/content/...`), `<repo>/content/resumedump.md` (local). The Docker image copies agent files into `/app`, so `__file__.parent.parent` is `/` and must not be the only lookup.
-- Future expansion: `ContentIndex("content/blog/", label="blog")` with its own optional config; no class changes needed
+- **Knowledge index** (`get_knowledge_index()`, `knowledge_lookup()`, `knowledge_block()`): a second BM25 index over `content/blog`, `content/cooking` and `content/about` (owner notes in his own words; `_*.md` skipped, `published: false` skipped, front-matter `title` becomes the top heading). Used only on a strong match: score ≥ `KNOWLEDGE_SCORE_THRESHOLD` (6.0), or ≥ 3.0 when the question names the post/project title. `content/about` notes (his views and hobbies, from the Notion "Portfolio persona source" page, [safe] items only) use `KNOWLEDGE_NOTES_THRESHOLD` (4.0) and never the title rule; their `<!-- keywords: ... -->` lines are indexed but stripped from what the model sees. A note also needs a question word in its heading or keyword line, and the best of the top 3 sections that clears its bar wins. `KNOWLEDGE_PHRASES` maps all-stopword questions with a clear meaning ("where are you from") to a keyword. Opinions live only here, not in the persona prompt. `agent/tests/eval_persona.py` + `persona_bench.jsonl` are the persona benchmark (exact production prompts, no LiveKit); its free retrieval half runs in CI. One section, capped at 1,200 chars. Terminal: appended to the user turn (system prefix stays cacheable). Voice: appended to the per-call context message. Docker copies the three folders; the agent workflow redeploys when they change.
 
 **BM25 empirical findings** (50-test suite with realistic voice queries):
 - Works well for keyword-rich queries, technical terms, proper nouns, skill names
 - Previously known limitations now fixed: `"AI"` collision (path_str removal), `"college"` synonym gap (section tags + query synonyms), `"current role"` vague queries (Maersk section tags)
-- Remaining limitation: pure stop-word queries (e.g. "what have you been doing") fall back to full resume text — correct behavior, BM25 IDF already handles de-weighting
+- Broad questions ("tell me about yourself", "what have you been doing lately") now hit the Summary instead of falling back to the full resume; pure small talk ("are you happy") still falls back
 - See `docs/voice-feature/02-resume-context-system.md` for full analysis
 
 ### Required environment variables
@@ -668,7 +670,7 @@ Test via LiveKit Cloud → your project → **Sandbox → Web Voice Agent → La
 
 ### Content
 
-`content/resumedump.md` — flat Markdown dump of Paymanshu's resume. Used by the `lookup_resume` tool (Feature 02). Previously lived at `readmes/resumedump.md`.
+`content/resumedump.md` — Markdown knowledge base of Paymanshu's resume. It is a deliberate **superset** of the one-page PDFs: every bullet from the MLE, AI-product and older resume versions (including ones cut for space), a `## Summary`, and the Maersk role split into project sections. Edit it by hand for content the PDF doesn't carry. `sync_resume.py` only adds what the PDF has and the dump lacks, so hand-added content survives; never run `--rewrite`, which regenerates from the PDF alone and would drop it.
 
 **Source-of-truth sync (`scripts/sync_resume.py`)** — the owner maintains ONE
 resume: the PDF in `public/assets/`. This script keeps `content/resumedump.md`

@@ -145,6 +145,7 @@ def build(
     mode: str | None = None,
     top_k: int = 3,
     max_chars: int = 500,
+    knowledge=None,
 ) -> BuiltContext:
     """Assemble the prompt for one request.
 
@@ -158,6 +159,10 @@ def build(
         mode:         One of MODES; defaults to `active_mode()`.
         top_k:        BM25 sections to retrieve.
         max_chars:    Per-turn text cap.
+        knowledge:    Optional callable(question) -> str, e.g.
+                      resume_context.knowledge_block. Its text (blog posts,
+                      side projects; usually "") is appended to the user turn,
+                      never the system prefix, so caching is unaffected.
     """
     mode = mode or active_mode()
     if mode not in MODES:
@@ -176,10 +181,17 @@ def build(
     else:  # bm25_system
         system = persona_body + RESUME_BLOCK.format(context=bm25_text)
 
-    if mode in ("full_hint", "persona_bm25_user"):
+    # A zero score means BM25 matched nothing and handed back the full resume
+    # as its fallback; in full_hint the system prompt already carries it, so
+    # repeating it in the user turn would double the request for no gain.
+    if mode == "full_hint" and bm25_score == 0.0:
+        user_text = question
+    elif mode in ("full_hint", "persona_bm25_user"):
         user_text = HINT_BLOCK.format(context=bm25_text, question=question)
     else:
         user_text = question
+    if knowledge is not None:
+        user_text += knowledge(question)
 
     turns = _normalise_history(history, max_chars)
     turns.append({"role": "user", "text": user_text})
@@ -196,6 +208,28 @@ def build(
 # ─── Provider shapes ───────────────────────────────────────────────
 # History goes AFTER the system message in both shapes, so a growing
 # conversation never perturbs the cacheable prefix.
+
+# Voice puts the per-turn context in an assistant message just before the
+# caller's turn (llm_voice.prepare_voice_ctx); this is its marker.
+VOICE_CONTEXT_PREFIX = "[Context for the next answer — internal, not spoken]\n"
+
+
+def voice_context(query: str, index, threshold: float, knowledge=None) -> tuple[str, dict]:
+    """The voice turn's context for `query`: BM25 top-2, or the full resume
+    when BM25 isn't confident, plus a notes/blog/project snippet when
+    `knowledge(query)` returns one. Returns (context, info for logging).
+
+    Plain Python, no LiveKit, so the eval harnesses build the same context the
+    voice agent does."""
+    context, score = index.search_scored(query, top_k=2)
+    source = "bm25-top2"
+    if score < threshold:
+        context, source = index.full_text, "full-resume"
+    if knowledge is not None and (extra := knowledge(query)):
+        context += extra
+        source += "+knowledge"
+    return context, {"score": score, "source": source, "chars": len(context), "query": query}
+
 
 def to_openai_messages(ctx: BuiltContext) -> list[dict]:
     """OpenAI / OpenRouter chat-completions `messages`."""

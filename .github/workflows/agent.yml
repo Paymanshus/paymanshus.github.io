@@ -11,6 +11,9 @@ on:
     paths:
       - "agent/**"
       - "content/resumedump.md"
+      - "content/blog/**"
+      - "content/cooking/**"
+      - "content/about/**"
       - "deploy/oracle/**"
       - ".github/workflows/agent.yml"
   workflow_dispatch:

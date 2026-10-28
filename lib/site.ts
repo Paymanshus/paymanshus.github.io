@@ -12,7 +12,7 @@ export const siteConfig = {
   url: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshus.github.io',
   locale: 'en_US',
   location: 'Bangalore, India',
-  email: 'paymanshus@gmail.com',
+  email: 'paymanshu@gmail.com',
   links: {
     github: 'https://github.com/Paymanshus',
     linkedin: 'https://www.linkedin.com/in/paymanshus',

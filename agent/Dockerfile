@@ -12,6 +12,11 @@ COPY agent/ .
 # Resume dump feeds the voice agent's BM25 index (agent/resume_context.py).
 # Lives outside agent/, hence the repo-root build context.
 COPY content/resumedump.md ./content/resumedump.md
+# Blog posts, /cooking projects and the owner's notes feed the knowledge index
+# (resume_context.get_knowledge_index), used only on a strong topic match.
+COPY content/blog/ ./content/blog/
+COPY content/cooking/ ./content/cooking/
+COPY content/about/ ./content/about/
 
 # Pre-download the turn-detector model at build time so cold starts don't
 # pay for it on first request.

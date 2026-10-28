@@ -346,7 +346,7 @@ async def _parse_chat_request(request: web.Request):
         history = []
     history = history[-MAX_HISTORY_TURNS:]
 
-    from resume_context import get_resume_index
+    from resume_context import get_resume_index, knowledge_block
 
     # Where the resume goes (system prefix vs user turn) is the active context
     # mode's decision — it determines whether the prompt prefix is cacheable.
@@ -356,6 +356,7 @@ async def _parse_chat_request(request: web.Request):
         persona_body=TERMINAL_PERSONA_BODY,
         index=get_resume_index(),
         max_chars=MAX_MESSAGE_CHARS,
+        knowledge=knowledge_block,
     )
 
     visitor = _visitor_id(_client_ip(request))

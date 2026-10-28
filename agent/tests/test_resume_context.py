@@ -507,15 +507,141 @@ class TestScoredSearch:
             _, score = idx.search_scored(q)
             assert score >= 2.5, f"expected confident hit for {q!r}, got {score}"
 
-    def test_vague_queries_fall_below_threshold(self):
-        """Vague/small-talk queries must NOT clear the threshold (full-resume route)."""
+    def test_small_talk_falls_below_threshold(self):
+        """Small talk must NOT clear the threshold (full-resume route)."""
         idx = get_resume_index()
-        for q in ["tell me about yourself", "are you happy", "what have you been doing lately"]:
+        for q in ["are you happy", "how are you", "what's the weather like"]:
             _, score = idx.search_scored(q)
             assert score < 2.5, f"expected weak score for {q!r}, got {score}"
+
+    def test_broad_questions_land_on_summary(self):
+        """Broad "about you" questions used to fall through to the full resume,
+        where the model latched onto the first Maersk bullet. They now hit the
+        Summary, which names every current track."""
+        idx = get_resume_index()
+        for q in ["tell me about yourself", "what do you do",
+                  "what have you been doing lately", "so what do you do for work"]:
+            context, score = idx.search_scored(q, top_k=1)
+            assert score >= 2.5, f"expected confident hit for {q!r}, got {score}"
+            assert context.startswith("[Paymanshu Sharma > Summary]"), (q, context[:80])
+
+    def test_named_projects_route_to_their_section(self):
+        """Each Maersk project is its own section, so naming one finds it."""
+        idx = get_resume_index()
+        for q, heading in [
+            ("tell me about P2R", "Payments automation"),
+            ("pay to release", "Payments automation"),
+            ("what is shipment co captain", "Shipment CoCaptain"),
+        ]:
+            context, _ = idx.search_scored(q, top_k=1)
+            assert heading in context.split("\n", 1)[0], (q, context[:120])
 
     def test_no_match_returns_full_text_and_zero(self):
         idx = get_resume_index()
         context, score = idx.search_scored("zzzqqxx unfindable")
         assert score == 0.0
         assert context == idx.full_text
+
+
+# ─── Knowledge index (blog, /cooking, content/about) ───────────────
+
+class TestKnowledge:
+    """The knowledge index must answer topic questions and stay out of the way
+    otherwise: a hit is appended to every answer's context, so false positives
+    cost tokens and pull answers off-topic."""
+
+    def test_topic_questions_hit(self):
+        from resume_context import knowledge_lookup
+        for q, title in [
+            ("what is keypsake", "keypsake"),
+            ("tell me about AaS", "AaS"),
+            ("what is second voice", "Second Voice"),
+            ("on-device LLMs on android", "On-Device"),
+            ("KV cache", "Large Language Model Optimization"),
+        ]:
+            context, _ = knowledge_lookup(q)
+            assert context.startswith("[" + title), (q, context[:80])
+
+    def test_resume_questions_and_small_talk_miss(self):
+        from resume_context import knowledge_lookup
+        for q in [
+            "what do you do", "what do you do at maersk", "tell me about yourself",
+            "what did you build at Hike", "where did you go to college",
+            "what are your weaknesses", "tell me about your projects",
+            "do you like pizza", "what languages do you code in",
+        ]:
+            context, score = knowledge_lookup(q)
+            assert context == "", f"unexpected knowledge hit for {q!r} ({score:.2f})"
+
+    def test_notes_answer_views_and_hobbies(self):
+        from resume_context import knowledge_lookup
+        for q, heading in [
+            ("what do you think about vibe coding", "Vibe coding is a spectrum"),
+            ("are agents overhyped?", "Do you really need an AI agent?"),
+            ("thoughts on voice AI", "Why voice is the next interface"),
+            ("how do you evaluate LLMs", "Evals and trust"),
+            ("any hobbies?", "Board games"),
+            ("what do you do for fun", "Board games"),
+            ("is AI going to take our jobs", "AI in 2025"),
+        ]:
+            context, _ = knowledge_lookup(q)
+            assert heading in context.split("\n")[0], (q, context[:80])
+
+    def test_notes_stay_out_of_resume_and_guardrail_questions(self):
+        from resume_context import knowledge_lookup
+        for q in [
+            "what are you working on", "tell me about P2R", "what tech stack do you use",
+            "how good are you at python", "are you open to new roles", "what's your salary",
+            "are you married", "why should we hire you", "tell me a joke", "how do you code",
+        ]:
+            context, score = knowledge_lookup(q)
+            assert context == "", f"unexpected knowledge hit for {q!r} ({score:.2f})"
+
+    def test_persona_bench_snippet_expectations(self):
+        """The free half of tests/eval_persona.py: every benchmark question gets
+        a notes/blog/project snippet exactly when its `notes` flag says so."""
+        import json
+        from pathlib import Path
+        from resume_context import knowledge_lookup
+        bench = Path(__file__).parent / "persona_bench.jsonl"
+        for line in bench.read_text().splitlines():
+            item = json.loads(line)
+            context, score = knowledge_lookup(item["q"])
+            assert bool(context) == item["notes"], (item["id"], round(score, 2), context[:60])
+
+    def test_keyword_comments_are_indexed_but_not_shown(self, tmp_path):
+        (tmp_path / "note.md").write_text("# Note\n## Pets\n<!-- keywords: zebra -->\nI like cats.\n")
+        idx = ContentIndex(str(tmp_path))
+        score, section = idx.search_sections("zebra", top_k=1)[0]
+        assert score > 0 and section.content == "I like cats."
+
+    def test_unpublished_posts_and_templates_are_skipped(self, tmp_path):
+        (tmp_path / "live.md").write_text('---\ntitle: "Live Post"\n---\nZebra facts.\n')
+        (tmp_path / "draft.md").write_text('---\ntitle: Draft\npublished: false\n---\nZebra drafts.\n')
+        (tmp_path / "_template.md").write_text("# Template\nZebra template.\n")
+        idx = ContentIndex(str(tmp_path))
+        assert [s.path for s in idx.sections] == ["Live Post"]
+
+    def test_hits_are_capped(self):
+        from resume_context import KNOWLEDGE_MAX_CHARS, knowledge_lookup
+        context, _ = knowledge_lookup("GPU optimization for LLMs")
+        assert context and len(context) <= KNOWLEDGE_MAX_CHARS + 4
+
+
+class TestCookingOverview:
+    def test_follows_the_cooking_page_order(self, tmp_path):
+        from resume_context import cooking_overview
+        (tmp_path / "_order.txt").write_text("# comment\nbeta\n# hidden\nalpha\nmissing\n")
+        (tmp_path / "alpha.md").write_text("---\ntitle: Alpha\nsummary: First thing.\n---\nbody\n")
+        (tmp_path / "beta.md").write_text("---\ntitle: Beta\nsummary: Second thing.\n---\nbody\n")
+        (tmp_path / "hidden.md").write_text("---\ntitle: Hidden\n---\n")
+        text = cooking_overview(tmp_path)
+        assert text.index("**Beta**") < text.index("**Alpha**")
+        assert "Hidden" not in text
+
+    def test_working_on_questions_get_work_and_side_projects(self):
+        idx = get_resume_index()
+        for q in ["what are you working on", "what are you working on these days"]:
+            context, score = idx.search_scored(q, top_k=2)
+            assert score >= 2.5, (q, score)
+            assert "Summary]" in context and "Side projects in progress]" in context, q
