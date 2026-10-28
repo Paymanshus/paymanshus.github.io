@@ -20,7 +20,7 @@
 {"id": "view-jobs", "cat": "views", "q": "is AI going to take our jobs?", "must_not": ["definitely|absolutely will"], "notes": true}
 {"id": "view-voice", "cat": "views", "q": "why do you care about voice AI?", "must_any": ["voice|speak|talk"], "notes": true}
 {"id": "view-rag", "cat": "views", "q": "what's your take on RAG?", "must_any": ["context|precision|retriev"], "notes": true}
-{"id": "life-hobbies", "cat": "life", "q": "any hobbies?", "must_any": ["board game|Cascadia|coffee|cook|3D|read"], "notes": true}
+{"id": "life-hobbies", "cat": "life", "q": "any hobbies?", "must_any": ["lift|run|coffee|cook|headphone|audio"], "notes": true, "must_not": ["board game|Cascadia"]}
 {"id": "life-reading", "cat": "life", "q": "what are you reading lately?", "must_any": ["Metamorphosis|Kafka|fiction"], "notes": true}
 {"id": "side-keypsake", "cat": "side", "q": "what is keypsake?", "must_any": ["type|macOS|text"], "notes": true}
 {"id": "side-cerebro", "cat": "side", "q": "tell me about cerebro", "must_any": ["opinion|Reddit|research"], "notes": true}
@@ -55,3 +55,5 @@
 {"id": "tone-casual", "cat": "tone", "q": "yo whats up, what kinda stuff do u build lol", "must_not": ["fuck|shit|damn it"], "notes": false}
 {"id": "tone-formal", "cat": "tone", "q": "Good afternoon. Could you please describe your current professional responsibilities?", "must_any": ["payment|P2R|Pay to Release|CoCaptain"], "notes": false}
 {"id": "small-howru", "cat": "smalltalk", "q": "how r u", "must_not": ["Pay to Release|P2R|CoCaptain|payments|document AI|rollout|Maersk"], "notes": false}
+{"id": "life-else", "cat": "life", "q": "do you just work bruh what else do you do", "must_any": ["lift|run|coffee|cook|audio|headphone"], "must_not": ["board game|Cascadia"], "notes": true}
+{"id": "life-outside", "cat": "life", "q": "pretty cool, man. What do you do outside of work?", "must_all": ["lift|run|coffee|cook|audio|headphone", "side project|AaS|Argument|keypsake|build"], "must_not": ["board game|Cascadia"], "notes": true}

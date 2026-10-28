@@ -227,7 +227,8 @@ def prepare_voice_ctx(chat_ctx, index, threshold: float, knowledge=None):
       - resume context for the latest user message, inserted just before it:
         BM25 top-2, or the full resume when BM25 isn't confident, plus a
         blog/side-project snippet when `knowledge(query)` returns one (it
-        clears a high bar, so usually nothing is added).
+        clears a high bar, so usually nothing is added); a short follow-up
+        with no hit retries with the previous question.
 
     Doing this per LLM call rather than in on_user_turn_completed is what keeps
     LiveKit's preemptive generation valid: it compares the chat context it
@@ -240,18 +241,19 @@ def prepare_voice_ctx(chat_ctx, index, threshold: float, knowledge=None):
 
     ctx = chat_ctx.copy()
     items = ctx.items
-    last_user = None
+    last_user = prev_user = None
     for i, item in enumerate(items):
         if getattr(item, "type", None) == "message" and item.role == "user":
             raw = item.text_content or ""
             clean = trim_user_text(voice_lexicon.fix_transcript(raw))
             if clean != raw:
                 items[i] = item.model_copy(update={"content": [clean]})
-            last_user = i
+            prev_user, last_user = last_user, i
     if last_user is None:
         return ctx, {}
     query = items[last_user].text_content or ""
-    context, info = llm_context.voice_context(query, index, threshold, knowledge)
+    previous = (items[prev_user].text_content or "") if prev_user is not None else ""
+    context, info = llm_context.voice_context(query, index, threshold, knowledge, previous)
     items.insert(last_user, lk_llm.ChatMessage(role="assistant", content=[CONTEXT_PREFIX + context]))
     return ctx, info
 

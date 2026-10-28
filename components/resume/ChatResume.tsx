@@ -142,8 +142,10 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;');
 }
 
-// Shown while a free-form query is in flight, rotated in a shuffled order so
-// a visitor never sees the same line twice in a row.
+// Shown while a free-form query is in flight. Lines are dealt from one
+// shuffled deck shared across queries, so every line shows once before any
+// repeats (a fresh shuffle per query kept surfacing the same few first).
+// Retired: "Overthinking it".
 const THINKING_MESSAGES = [
   "Triangulating",
   "Discombobulating",
@@ -153,7 +155,6 @@ const THINKING_MESSAGES = [
   "Strategizing",
   "Faking thinking really long",
   "Consulting the résumé oracle",
-  "Overthinking it",
   "Rummaging through memories",
   "Connecting the dots",
   "Pretending to be busy",
@@ -175,21 +176,30 @@ function shuffled<T>(items: T[]): T[] {
   return out;
 }
 
+let thinkingDeck: string[] = [];
+let lastThinking = '';
+
+function nextThinkingMessage(): string {
+  if (thinkingDeck.length === 0) {
+    thinkingDeck = shuffled(THINKING_MESSAGES);
+    // No repeat across the reshuffle boundary.
+    if (thinkingDeck[0] === lastThinking) thinkingDeck.push(thinkingDeck.shift()!);
+  }
+  lastThinking = thinkingDeck.shift()!;
+  return lastThinking;
+}
+
 function ThinkingLine() {
-  const [order] = useState(() => shuffled(THINKING_MESSAGES));
-  const [index, setIndex] = useState(0);
+  const [message, setMessage] = useState(nextThinkingMessage);
 
   useEffect(() => {
-    const id = setInterval(
-      () => setIndex(i => (i + 1) % order.length),
-      THINKING_ROTATE_MS
-    );
+    const id = setInterval(() => setMessage(nextThinkingMessage()), THINKING_ROTATE_MS);
     return () => clearInterval(id);
-  }, [order.length]);
+  }, []);
 
   return (
     <div className="text-[#666666]" aria-live="polite">
-      <span className="animate-pulse">{order[index]}...</span>
+      <span className="animate-pulse">{message}...</span>
       <span className="terminal-cursor ml-1 align-[-0.15em]" />
     </div>
   );
