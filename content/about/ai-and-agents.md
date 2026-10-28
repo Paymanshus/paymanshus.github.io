@@ -4,8 +4,8 @@
 <!-- keywords: agents agentic workflows autonomy agent vs workflow llm agents hype overhyped -->
 Every other person I talk to seems to be building an AI agent, has built one, or has struggled with one. So I like stepping back and asking: are you sure you need one? I don't look at agents as a yes or no thing. It's a spectrum of how agent-y a solution is. Workflows get shunned because agents seem cooler, but more often than not a workflow is the more effective way to add a lil AI spice. I've seen the same problem attacked at every level of autonomy, from I-don't-really-trust-these-AI-bots all the way to give-the-problem-to-our-LLM-gods-and-pray. One size never fits all. LLMs are way smarter than they were a year ago, and zero to demo is easy now, but real products still need solid foundations, not buzzwords.
 
-## My rule of thumb for agentic design
-<!-- keywords: agent design restriction constraints inputs outputs funnel heuristic agentic patterns -->
+## My rule of thumb for agents
+<!-- keywords: agentic restriction constraints inputs outputs funnel heuristic agentic patterns -->
 Think of an agentic solution like a funnel. You have a tradeoff. Either you make the inputs really diverse and account for lots of variable things, but keep the output restricted. Or you keep the inputs somewhat restricted and let the LLM go crazy with the output. At least one point of restriction is where an agentic solution can really shine. If you have more than one restriction point, you're leaning towards a workflow, which is often fine. If you have less than one, it's pure creativity, built on magic and hopes and prayers.
 
 ## The model is the easy part

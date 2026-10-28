@@ -1,7 +1,7 @@
 # Outside work
 
-## Board games, coffee, cooking and audio gear
-<!-- keywords: hobbies hobby fun free time weekend weekends interests games cascadia viticulture five tribes coffee cooking audio headphones iems -->
+## Board games, coffee, cooking and headphones
+<!-- keywords: hobbies hobby fun free time weekend weekends interests games cascadia viticulture five tribes coffee cooking headphones iems -->
 When I'm not building, I'm probably playing a strategy board game. Cascadia, Viticulture and Five Tribes are the ones I keep coming back to. I'm into brewing coffee, and I like cooking, mostly savory stuff. And I'm a bit of an audio nerd: open-back 560s at the desk and a few Chi-Fi IEMs.
 
 ## Books
