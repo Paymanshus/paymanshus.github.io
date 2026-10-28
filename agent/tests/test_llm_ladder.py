@@ -371,6 +371,20 @@ async def test_knowledge_goes_in_the_user_turn_not_the_prefix():
     assert c.turns[-1]["text"].startswith(plain.turns[-1]["text"])
 
 
+async def test_short_followup_finds_the_snippet_through_the_previous_question():
+    """"but which open backs" names no topic; the previous question does."""
+    from resume_context import knowledge_block
+    history = [{"role": "user", "text": "what headphones do you have"},
+               {"role": "system", "text": "Open-back headphones at the desk."}]
+    c = llm_context.build(
+        "but which particular open backs", history, persona_body=TERMINAL_PERSONA_BODY,
+        index=get_resume_index(), mode="full_hint", knowledge=knowledge_block,
+    )
+    assert "560s" in c.turns[-1]["text"]
+    alone = llm_context.knowledge_for("but which particular open backs", "", knowledge_block)
+    assert alone == ""
+
+
 async def test_no_match_does_not_repeat_the_resume_in_the_user_turn():
     c = build("are you happy?", "full_hint")
     assert c.bm25_score == 0.0
@@ -383,7 +397,7 @@ async def test_bm25_still_runs_in_hint_mode():
     c = build("What did you do at Maersk?", "full_hint")
     assert c.bm25_chars > 0
     assert c.bm25_score > 0
-    assert "Most relevant resume sections" in c.turns[-1]["text"]
+    assert "Resume sections that may be relevant" in c.turns[-1]["text"]
 
 
 async def test_frontend_system_role_maps_to_assistant():

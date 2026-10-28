@@ -580,8 +580,10 @@ class TestKnowledge:
             ("are agents overhyped?", "Do you really need an AI agent?"),
             ("thoughts on voice AI", "Why voice is the next interface"),
             ("how do you evaluate LLMs", "Evals and trust"),
-            ("any hobbies?", "Board games"),
-            ("what do you do for fun", "Board games"),
+            ("any hobbies?", "Hobbies"),
+            ("what do you do for fun", "Hobbies"),
+            ("do you just work bruh what else do you do", "Hobbies"),
+            ("what headphones do you have", "Hobbies"),
             ("is AI going to take our jobs", "AI in 2025"),
         ]:
             context, _ = knowledge_lookup(q)

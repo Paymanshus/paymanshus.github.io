@@ -554,13 +554,14 @@ KNOWLEDGE_NOTES_THRESHOLD = 4.0
 KNOWLEDGE_STOPWORDS: frozenset[str] = QUERY_STOPWORDS | frozenset("""
     do who about you yourself work worked working job role build built make
     made use used using think know project projects thing things stuff
-    experience company current currently now
+    experience company current currently now anywhere recently
 """.split())
 
 # Questions made only of stopwords whose meaning is still clear: the matching
 # word is appended to the query before lookup.
 KNOWLEDGE_PHRASES = (
     (re.compile(r"\bwhere\b.*\b(you|u|you're)\s+(from|grow up|grew up)\b", re.I), "hometown"),
+    (re.compile(r"\b(what else do (you|u) do|(outside|apart from|besides|other than) (of )?work|just work)\b", re.I), "hobbies"),
 )
 
 # A knowledge hit is a supplement, so it is capped: one section, trimmed.

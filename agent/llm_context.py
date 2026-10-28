@@ -60,9 +60,24 @@ RESUME_BLOCK = "\n\nRESUME CONTEXT:\n{context}\n"
 # than as the authoritative context, because in `full_hint` the model can also see
 # the whole resume in the system message.
 HINT_BLOCK = (
-    "Most relevant resume sections for this question:\n{context}\n\n"
+    "Resume sections that may be relevant (ignore any that don't answer the question):\n"
+    "{context}\n\n"
     "Question: {question}"
 )
+
+# A short follow-up ("but which ones?") rarely names its topic, so when it
+# finds no snippet on its own, the lookup retries with the previous question
+# in front. Longer messages stand on their own.
+FOLLOWUP_MAX_WORDS = 8
+
+
+def knowledge_for(question: str, previous: str, knowledge) -> str:
+    """`knowledge(question)`, or for a short follow-up with no hit of its own,
+    `knowledge(previous + question)`."""
+    extra = knowledge(question)
+    if not extra and previous and len(question.split()) <= FOLLOWUP_MAX_WORDS:
+        extra = knowledge(f"{previous} {question}")
+    return extra
 
 
 def active_mode() -> str:
@@ -190,10 +205,10 @@ def build(
         user_text = HINT_BLOCK.format(context=bm25_text, question=question)
     else:
         user_text = question
-    if knowledge is not None:
-        user_text += knowledge(question)
-
     turns = _normalise_history(history, max_chars)
+    if knowledge is not None:
+        previous = next((t["text"] for t in reversed(turns) if t["role"] == "user"), "")
+        user_text += knowledge_for(question, previous, knowledge)
     turns.append({"role": "user", "text": user_text})
 
     return BuiltContext(
@@ -214,10 +229,11 @@ def build(
 VOICE_CONTEXT_PREFIX = "[Context for the next answer — internal, not spoken]\n"
 
 
-def voice_context(query: str, index, threshold: float, knowledge=None) -> tuple[str, dict]:
+def voice_context(query: str, index, threshold: float, knowledge=None, previous: str = "") -> tuple[str, dict]:
     """The voice turn's context for `query`: BM25 top-2, or the full resume
     when BM25 isn't confident, plus a notes/blog/project snippet when
-    `knowledge(query)` returns one. Returns (context, info for logging).
+    `knowledge_for` finds one (`previous` is the caller's last question).
+    Returns (context, info for logging).
 
     Plain Python, no LiveKit, so the eval harnesses build the same context the
     voice agent does."""
@@ -225,7 +241,7 @@ def voice_context(query: str, index, threshold: float, knowledge=None) -> tuple[
     source = "bm25-top2"
     if score < threshold:
         context, source = index.full_text, "full-resume"
-    if knowledge is not None and (extra := knowledge(query)):
+    if knowledge is not None and (extra := knowledge_for(query, previous, knowledge)):
         context += extra
         source += "+knowledge"
     return context, {"score": score, "source": source, "chars": len(context), "query": query}
