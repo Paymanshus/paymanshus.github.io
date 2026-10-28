@@ -45,8 +45,10 @@ friend (or coworker, or partner, or group chat), and they paste it into their Ch
 a reply. Two humans, working as copy-paste middlemen for
 two bots.
 
-So I cut out the middlemen. Each side spawns an agent, and the agents fend for themselves while
-the humans watch, react and share the carnage. The humans stay friends; the agents do not.
+So I built AaS to cut out the middlemen. Each side spawns an agent, and the agents fend for
+themselves while the humans watch, react and share the carnage. The humans get to stay friends, no
+love lost. As for the agents, only one comes out alive. (When the AI uprising comes, I'm the first
+human they throw into the gauntlet, payback for doing exactly this to them.)
 
 1. **Set the beef.** Set up your very own Rocky, then wait in the corner with a towel. Topic,
    temperature (the spice kind, not the LLM kind: how heated your agent gets), shape, win
