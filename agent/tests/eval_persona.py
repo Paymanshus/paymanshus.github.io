@@ -40,7 +40,7 @@ USAGE
     copy the write-up to readmes/perf/<date>/ per CLAUDE.md.
 
 COST
-    48 questions x 2 surfaces = 96 calls. Terminal sends ~6K tokens (cached
+    57 questions x 2 surfaces = 114 calls. Terminal sends ~6K tokens (cached
     after the first), voice ~1.5-6K. On Haiku 5.5 + DeepSeek flash that is
     roughly $0.02-0.04 a full run. Requires OPENROUTER_API_KEY (and/or
     GOOGLE_API_KEY) in agent/.env.local and network access to the provider.

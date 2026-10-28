@@ -19,7 +19,7 @@ Two main bodies of work: payments document AI in production, and Shipment CoCapt
 
 #### Payments automation — Pay to Release and Payapps (production document AI)
 
-- Scaling payments automation across **12+ countries**: production document-AI pipelines (Pay to Release, Payapps) that read payment proofs and remittance emails with Azure Document Intelligence and LLMs, validate them against SAP, and auto-approve or post; **a few thousand documents/day** worth ~$1.3M/day.
+- Scaling payments automation across **12+ countries**: production document-AI pipelines (Pay to Release, Payapps) that read payment proofs and remittance emails with Azure Document Intelligence and LLMs, reconcile them against bank credit lines, and auto-approve or post; **a few thousand documents/day**, multi-million dollar transactions daily.
 - Made country onboarding **config-driven**: per-country prompt configs with isolated benchmarks and **regression evals** gating every launch, so new markets ship without degrading live ones. Iterative evals cut **human-in-the-loop** review toward ~80% straight-through (zero-touch) processing and ~21 FTEs of targeted manual-effort savings.
 - Owned **ingestion reliability**: cut lost submissions from 30-60/day to under 5 with queue-first acceptance, hash-based idempotent dedup, root-caused upstream connection resets, and retry-by-default policies. Set **SLOs** for 99.9% no-loss ingestion and 30-minute processing via SLA-priority case ordering and Retry-After-aware backoff under SAP rate limits.
 - Used SLO-driven **observability** (Prometheus, Grafana, Loki; drift alerts vs 7-day baselines, trace IDs) to catch and fix automation-rate dips, error spikes during volume surges, and silent failures; dashboards-as-code for support handover.
