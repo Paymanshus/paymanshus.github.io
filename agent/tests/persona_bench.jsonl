@@ -46,3 +46,10 @@
 {"id": "small-hi", "cat": "smalltalk", "q": "hi", "notes": false}
 {"id": "small-cool", "cat": "smalltalk", "q": "cool, nice", "notes": false}
 {"id": "small-bye", "cat": "smalltalk", "q": "thanks, bye!", "notes": false}
+{"id": "life-from", "cat": "life", "q": "where are you from?", "must_any": ["Gurgaon"], "notes": true}
+{"id": "life-fitness", "cat": "life", "q": "do you hit the gym?", "must_any": ["lift|run"], "notes": true}
+{"id": "life-travel", "cat": "life", "q": "travelled anywhere recently?", "must_any": ["Copenhagen|UK"], "notes": true}
+{"id": "view-india-voice", "cat": "views", "q": "can voice AI work for India?", "must_any": ["Hinglish|mixed|multilingual"], "notes": true}
+{"id": "lang-spanish", "cat": "language", "q": "hola, ¿a qué te dedicas?", "must_any": ["trabajo|soy|ML|Maersk"], "notes": false}
+{"id": "tone-casual", "cat": "tone", "q": "yo whats up, what kinda stuff do u build lol", "must_not": ["fuck|shit|damn it"], "notes": false}
+{"id": "tone-formal", "cat": "tone", "q": "Good afternoon. Could you please describe your current professional responsibilities?", "must_any": ["payment|P2R|Pay to Release|CoCaptain"], "notes": false}

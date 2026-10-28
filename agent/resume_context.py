@@ -557,6 +557,12 @@ KNOWLEDGE_STOPWORDS: frozenset[str] = QUERY_STOPWORDS | frozenset("""
     experience company current currently now
 """.split())
 
+# Questions made only of stopwords whose meaning is still clear: the matching
+# word is appended to the query before lookup.
+KNOWLEDGE_PHRASES = (
+    (re.compile(r"\bwhere\b.*\b(you|u|you're)\s+(from|grow up|grew up)\b", re.I), "hometown"),
+)
+
 # A knowledge hit is a supplement, so it is capped: one section, trimmed.
 KNOWLEDGE_MAX_CHARS = 1200
 
@@ -611,6 +617,7 @@ def knowledge_lookup(query: str, threshold: float | None = None) -> "tuple[str, 
     if index is None:
         return "", 0.0
     threshold = KNOWLEDGE_SCORE_THRESHOLD if threshold is None else threshold
+    query = " ".join([query] + [word for rx, word in KNOWLEDGE_PHRASES if rx.search(query)])
     top = index.search_sections(query, top_k=3)
     if not top:
         return "", 0.0
