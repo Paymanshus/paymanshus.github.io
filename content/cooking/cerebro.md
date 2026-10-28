@@ -34,7 +34,7 @@ Turning "this card is a beast" and "absolute furnace, returned it" into somethin
 is the same kind of problem recommender systems and retrieval live on, and it's a cool one to
 solve.
 
-CereBro's answer: the LLM only extracts and clusters. Scoring is deterministic, zero-LLM math
+CereBro's answer: the LLM extracts and clusters. Scoring is deterministic, zero-LLM math
 over weighted claims, and every number traces back to a source link. Exclude a source or
 re-weight one and everything recomputes instantly, with no model call. An LLM writes a summary
-on top, labelled as synthesized, and it never outranks the counts underneath.
+on top of the counts, labelled as synthesized.

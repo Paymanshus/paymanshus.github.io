@@ -47,7 +47,7 @@ type into any text box, in any app, plus everything you copy. It's on Mac now an
 Windows too, because nobody on any OS deserves to lose their words.
 
 - **Typed.** One entry per text box, with the app or website, its icon and the window title.
-  Only what you typed this time is kept, not text that was already there.
+  It keeps just what you typed this time.
 - **The moment it all went wrong.** As you write, keypsake keeps versions. If a box suddenly
   empties or loses most of its text, the version right before is saved, marked in amber and
   shown first.
@@ -65,3 +65,6 @@ I use it every day, and it has already saved me more retyping than I'd like to a
 It's a keylogger you run on purpose, so trust came first. History is encrypted (AES-GCM) and
 stays on your Mac; nothing is sent anywhere. Password fields, password managers and concealed
 clipboard items are never recorded, and typed text is deleted after 7, 30, 90 or 365 days.
+
+Don't take my word for it. Point your own coding agent at the repo and ask it: is this safe, and
+does my text go anywhere?
