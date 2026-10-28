@@ -557,7 +557,7 @@ class TestKnowledge:
             ("tell me about AaS", "AaS"),
             ("what is second voice", "Second Voice"),
             ("on-device LLMs on android", "On-Device"),
-            ("KV cache", "Large Language Model Optimization"),
+            ("KV cache", "Fitting Really Big Models"),
         ]:
             context, _ = knowledge_lookup(q)
             assert context.startswith("[" + title), (q, context[:80])
@@ -624,7 +624,7 @@ class TestKnowledge:
 
     def test_hits_are_capped(self):
         from resume_context import KNOWLEDGE_MAX_CHARS, knowledge_lookup
-        context, _ = knowledge_lookup("GPU optimization for LLMs")
+        context, _ = knowledge_lookup("on-device LLMs on android")
         assert context and len(context) <= KNOWLEDGE_MAX_CHARS + 4
 
 
