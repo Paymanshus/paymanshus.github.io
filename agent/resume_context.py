@@ -44,6 +44,10 @@ logger = logging.getLogger("resume-context")
 # An HTML comment in content markdown; group 1 is its text minus a "keywords:" label.
 _COMMENT_RE = re.compile(r"<!--\s*(?:keywords:)?(.*?)-->", re.DOTALL)
 
+# Sections never indexed: a post's link list matches topic words ("fine-tuning",
+# "LLMs") in paper titles but has nothing the agent can answer from.
+_UNINDEXED_HEADINGS = {"references"}
+
 
 @dataclass
 class Section:
@@ -208,7 +212,7 @@ class ContentIndex:
             # for recall but never shown to the model.
             keywords = " ".join(_COMMENT_RE.findall(content))
             content = _COMMENT_RE.sub("", content).strip()
-            if content and heading_stack:
+            if content and heading_stack and heading_stack[-1][1].lower() not in _UNINDEXED_HEADINGS:
                 path_str = " > ".join(text for _, text in heading_stack)
                 heading = heading_stack[-1][1]
                 level = heading_stack[-1][0]
