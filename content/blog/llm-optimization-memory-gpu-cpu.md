@@ -42,6 +42,10 @@ The prospect of fitting larger models with limited compute made researchers in t
 
 16-bit float representations have been extensively experimented with over time to try and find the option that could handle the widest applicable range of values expected in regular computation. Also called half-precision due to its nature of storing information with half the available number of bits, the recent standardized versions of the format have showed decent capability for learning tasks besides the reduced storage requirement.
 
+<aside class="pull-quote" aria-hidden="true">
+<p>How much information out of what we initially store do we really need to have a model work at its full potential?</p>
+</aside>
+
 In the conventional full precision, 1 bit refers to the sign of the float value, 8 are reserved for the exponent part, while the remaining 23 represent the mantissa, or the significand values of the floating point. This allows for the 32-bit format to represent the range -1e⁻³⁸ to 3e³⁸.
 
 Half-precision, on the other hand, does away with 16 of the bits from the previous case and only has half of the storage memory to work with to accommodate the available bits differently. Here, 5 bits are assigned to the exponent representation, and 10 are for the mantissa, according to the latest IEEE 754 standard. The same 1 bit is used to represent the sign, which is maintained across all signed numeric representation formats. While the representable range with this 16-bit floating point format falls down to -6e⁻⁸ to 65504, this was found to be sufficient for several modeling tasks.
@@ -135,6 +139,11 @@ The objective here was to compare models before and after different types of qua
 **Memory Savings:** As expected, as per the previously described calculations for computing model size in memory, the benchmarks for model sizes that were able to be loaded in gives us a clearer picture of a more realistic setting with commonly used models. Comparing model size with GPU memory of the selected device, and then measuring how far different quantization techniques can take us in being able to move up a level and possibly run LLM tasks with a model with a "slightly" larger number of parameters, can provide a necessary perspective into the capabilities of a specified hardware setup.
 
 Considering load time and run time memory usages while accommodating for some potential delta at run time, we can see the drop off in memory requirements for the same model, such as the Llama2-7b initially requiring almost 21 GiB unquantized, something which the more commonly available T4 GPU from NVIDIA would not even be able to load in with its 16GB VRAM capacity. This very same model comes down to a mere ~5.8 GiB later in its 4-bit quantized state. Thus, given a task, with its respective dataset, and some compute power at hand, such a reference can help align what potential exists in terms of model selection.
+
+<aside class="post-stat" aria-hidden="true">
+<p class="post-stat-figure">21 GiB <span class="post-stat-to">→ ~5.8 GiB</span></p>
+<p class="post-stat-label">Llama2&#8209;7b on GPU · unquantized to 4&#8209;bit</p>
+</aside>
 
 **Performance Quality:** The next essential factor to consider — will these efficiently loaded models be able to perform at the same quality as their original unquantized versions? While newer methods currently in standardized use for quantization purposes promise to be fairly optimized in terms of retaining a maximum percentage of their original learnt capacity, some performance drop-offs are still to be expected. In cases where quality is key, these may be the deciding factor of the model-quantization method combination chosen, as quantized versions of models might fail in precision tasks which they were able to do well in in their original state.
 
