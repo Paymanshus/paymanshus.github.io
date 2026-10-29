@@ -107,7 +107,20 @@
 .thought-post-content strong {
   color: var(--color-text-primary);
   font-family: var(--font-space-grotesk), sans-serif;
-  font-weight: 500;
+  font-weight: 600;
+}
+
+/* Bold that opens a paragraph or list item (tagged in lib/blog.ts). In list
+   items it sits on its own line as a small heading over the body text. */
+.thought-post-content .lead-in {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.thought-post-content .lead-in-block {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 1.08em;
 }
 
 .thought-post-content code {
@@ -136,8 +149,34 @@
   padding-left: 1.4rem;
 }
 
+/* Tailwind's preflight strips list markers; posts need them back. */
+.thought-post-content ol {
+  list-style: decimal;
+}
+
+.thought-post-content ul {
+  list-style: square;
+}
+
 .thought-post-content li + li {
   margin-top: 0.8rem;
+}
+
+/* Nested lists are short points under a heading-like item; keep them tight. */
+.thought-post-content li > ul,
+.thought-post-content li > ol {
+  margin-top: 0.4rem;
+}
+
+.thought-post-content li li + li {
+  margin-top: 0.3rem;
+}
+
+/* Numbers and bullets step back so the lead-in text is what the eye finds. */
+.thought-post-content li::marker {
+  color: var(--color-text-secondary);
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 0.82em;
 }
 
 .thought-post-content blockquote {
@@ -145,6 +184,60 @@
   padding-left: 1.25rem;
   color: var(--color-text-secondary);
   font-style: italic;
+}
+
+/* Pull quotes and stat callouts are raw-HTML asides in the post markdown. They
+   repeat what the text already says, so posts mark them aria-hidden. */
+.thought-post-content .pull-quote,
+.thought-post-content .post-stat {
+  margin-block: 3.5rem;
+}
+
+.thought-post-content .pull-quote::before {
+  content: '';
+  display: block;
+  width: 120px;
+  height: 3px;
+  margin-bottom: 1.25rem;
+  background: var(--color-brand-red);
+}
+
+.thought-post-content .pull-quote p {
+  max-width: 32ch;
+  color: var(--color-text-primary);
+  font-family: var(--font-instrument-serif), serif;
+  font-size: clamp(1.75rem, 1.45rem + 1.1vw, 2.4rem);
+  font-style: italic;
+  line-height: 1.2;
+  letter-spacing: 0.005em;
+  word-spacing: 0.06em;
+}
+
+.thought-post-content .post-stat {
+  border-block: 1px solid var(--color-border);
+  padding-block: 1.75rem;
+}
+
+.thought-post-content .post-stat-figure {
+  color: var(--color-text-secondary);
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-size: clamp(2.25rem, 1.8rem + 1.6vw, 3.25rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.thought-post-content .post-stat-figure .post-stat-to {
+  color: var(--color-brand-red);
+}
+
+.thought-post-content .post-stat-label {
+  margin-top: 1rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
 .landing-grid-shell {

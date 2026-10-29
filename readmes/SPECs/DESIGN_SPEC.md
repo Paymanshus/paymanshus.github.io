@@ -57,6 +57,27 @@ Full conventions, tokens and pipeline constraints: the `blog-figures` skill, or
 `readmes/SPECs/BLOG_VISUALS.md` if the skill isn't loaded. Tables, blockquotes
 and figures are styled in `app/globals.css` under the blog-post section.
 
+### Blog lead-ins and lists
+
+Bold in post text is Space Grotesk 600 against Lora body. Bold that opens a
+paragraph or list item is a lead-in (`lib/blog.ts` tags it): 700 weight, and in
+a list item a label-style lead-in ("**Privacy:** …", or a bold-only item) sits on
+its own line as a small heading with its colon dropped. Lists keep their markers
+(Tailwind's preflight removes them), set small in muted mono so the lead-in text
+is what the eye lands on.
+
+### Blog pull quotes and stat callouts
+
+Raw-HTML asides in post markdown, used sparingly (one or two per post) to break
+long text runs. Both repeat the text, so they carry `aria-hidden="true"`.
+
+- `<aside class="pull-quote"><p>…</p></aside>` — a verbatim line from the post in
+  Instrument Serif italic, under the 120×3px red rule. Kept apart from section
+  headings by the serif face.
+- `<aside class="post-stat">` with `p.post-stat-figure` (big Space Grotesk
+  number, `span.post-stat-to` in red for the result) and `p.post-stat-label`
+  (muted mono caption; use `&#8209;` so terms like 4-bit don't break).
+
 ## Typography
 
 Current fonts are loaded in `app/layout.tsx`.

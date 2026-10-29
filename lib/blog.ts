@@ -4,6 +4,7 @@ import matter from 'gray-matter';
 import { remark } from 'remark';
 import html from 'remark-html';
 import gfm from 'remark-gfm';
+import type { Parent, Root } from 'mdast';
 import { formatDisplayDate } from '@/lib/site';
 
 const BLOG_DIRECTORY = path.join(process.cwd(), 'content', 'blog');
@@ -144,6 +145,40 @@ export function getAdjacentBlogPosts(slug: string): AdjacentPosts {
   };
 }
 
+/**
+ * Tags bold text that opens a paragraph ("**Enhanced privacy:** By confining…")
+ * with `lead-in` so it can carry more weight than inline bold. In a list item,
+ * a label lead-in (ending in a colon, or standing alone) becomes a small
+ * heading on its own line (`lead-in-block`) and loses its colon. Bold that is
+ * the subject of a running sentence ("**QAT** incorporates…") stays inline.
+ */
+function markLeadIns() {
+  const tag = (paragraph: Parent, inListItem: boolean) => {
+    const [first, next] = paragraph.children;
+    if (first?.type !== 'strong' || (!next && !inListItem)) return;
+
+    const label = first.children.at(-1);
+    const labelColon = label?.type === 'text' && /:\s*$/.test(label.value);
+    const nextColon = next?.type === 'text' && /^:/.test(next.value);
+    const asBlock = inListItem && (!next || labelColon || nextColon);
+
+    first.data = { hProperties: { className: asBlock ? ['lead-in', 'lead-in-block'] : ['lead-in'] } };
+    if (!asBlock) return;
+
+    if (label?.type === 'text') label.value = label.value.replace(/:\s*$/, '');
+    if (next?.type === 'text') next.value = next.value.replace(/^:\s*/, '');
+  };
+
+  const walk = (node: Parent, firstInListItem: boolean) => {
+    if (node.type === 'paragraph') return tag(node, firstInListItem);
+    node.children.forEach((child, index) => {
+      if ('children' in child) walk(child, node.type === 'listItem' && index === 0);
+    });
+  };
+
+  return (tree: Root) => walk(tree, false);
+}
+
 export function getBlogPostBySlug(slug: string): BlogPost | null {
   const source = readBlogSourceBySlug(slug);
 
@@ -160,7 +195,11 @@ export function getBlogPostBySlug(slug: string): BlogPost | null {
 
   // sanitize: false lets posts embed inline SVG figures. Safe here because blog
   // content is authored in-repo and version-controlled — never user submitted.
-  const processedContent = remark().use(gfm).use(html, { sanitize: false }).processSync(content);
+  const processedContent = remark()
+    .use(gfm)
+    .use(markLeadIns)
+    .use(html, { sanitize: false })
+    .processSync(content);
 
   return {
     ...toPreview(slug, frontmatter, content),

@@ -15,11 +15,20 @@ _Written in December 2024. The small-model landscape has moved fast since — Ph
 
 In recent years, businesses and professionals recognized the impressive capabilities of Large Language Models (LLMs) for generating text and completing various language-related tasks. However, LLM implementation comes with substantial challenges, primarily due to the extensive utilization of computational resources and energy, resulting in high operational costs for users. Consequently, a surge of research and development efforts now focus on creating more efficient and economical LLM deployment methods. At the forefront of this optimization research is the challenge of enhancing throughput and reducing latency while maintaining high-quality performance, all while using only a fraction of the typical computing resources. These efforts aim to make LLMs more accessible and practical for a broader range of applications and users.
 
-The two approaches in solving the problem of LLMs excessively utilizing computational and energy resources are: (1) engineering optimization of LLMs to utilize fewer resources, and (2) improve the performance of smaller LLMs closer to the levels of large LLMs. The second approach showed promising results enabling deployment of models on resource-constrained devices such as mobile phones. Deploying LLMs, including Multimodal LMs (MLMs), on smartphones and other edge devices is transitioning from concept to reality.
+The two approaches in solving the problem of LLMs excessively utilizing computational and energy resources are:
+
+1. Engineering optimization of LLMs to utilize fewer resources
+2. Improve the performance of smaller LLMs closer to the levels of large LLMs
+
+The second approach showed promising results enabling deployment of models on resource-constrained devices such as mobile phones. Deploying LLMs, including Multimodal LMs (MLMs), on smartphones and other edge devices is transitioning from concept to reality.
 
 An important question to ask at this juncture is: "what are the benefits of running LLM models on smartphones and edge devices?". The four reasons to persuade practitioners and businesses to deploy LLMs on devices are listed below:
 
-1. **Improved accessibility:** On-device LLM deployment contributes to accessibility and empowers users in remote and disconnected environments due to the following reasons: (1) reduces reliance on external infrastructure, (2) eliminates dependency on cloud services, (3) avoids LLM subscription costs, and (4) operates without internet connectivity.
+1. **Improved accessibility:** On-device LLM deployment contributes to accessibility and empowers users in remote and disconnected environments due to the following reasons:
+   - Reduces reliance on external infrastructure
+   - Eliminates dependency on cloud services
+   - Avoids LLM subscription costs
+   - Operates without internet connectivity
 2. **Enhanced privacy:** Eliminating the need for external processing contributes to curbing apprehensions around data security. By confining operations to the device, sensitive information remains safeguarded, especially critical in regulated industries like finance and healthcare.
 3. **Upgraded performance:** Rapid advancements in optimization techniques are enabling faster and more responsive on-device LLMs minimizing latency compared to cloud-based alternatives as well as enhancing interactivity for a better user experience.
 4. **Customizability:** On-device deployment allows model adaptation (fine-tuned models) in a more private and controlled manner. Custom needs can be addressed without compromising data integrity or exposing confidential data.
@@ -28,7 +37,11 @@ An important question to ask at this juncture is: "what are the benefits of runn
 
 Two use cases are illustrated. First, a mobile app for intelligent document analysis and querying by deploying LLMs on device. Second, a multi-LoRA application that allows users to switch between different AI capabilities for various tasks, all powered by a single base model on their smartphone.
 
-The reasons for illustrating these use cases are: (1) demonstrate the idea of deploying multiple LLMs on device to solve business problems, (2) leverage capabilities on intelligent document processing (IDP) and solve IDP problems on-device, and (3) advocate to privacy-focused industries such as finance and healthcare to find value from these approaches.
+The reasons for illustrating these use cases are:
+
+1. Demonstrate the idea of deploying multiple LLMs on device to solve business problems
+2. Leverage capabilities on intelligent document processing (IDP) and solve IDP problems on-device
+3. Advocate to privacy-focused industries such as finance and healthcare to find value from these approaches
 
 The starting point was an existing suite of reusable solutions built for addressing end-to-end document processing challenges. Two key areas tackled by its components are:
 
@@ -59,7 +72,16 @@ A variety of open-source libraries now enable efficient deployment of popular mo
 
 ### ONNX Runtime
 
-ONNX Runtime for C++ inference, integrated into Android applications using JNI, offers a powerful approach for on-device AI deployment. Key advantages include: (1) high performance, (2) hardware-agnostic nature, (3) minimal dependencies, (4) support for a broad range of devices, (5) consistent performance across environments, and (6) seamless deployment of models trained in PyTorch and TensorFlow. With strong community and industry backing, ONNX Runtime provides a flexible and efficient solution for mobile AI needs.
+ONNX Runtime for C++ inference, integrated into Android applications using JNI, offers a powerful approach for on-device AI deployment. Key advantages include:
+
+- High performance
+- Hardware-agnostic nature
+- Minimal dependencies
+- Support for a broad range of devices
+- Consistent performance across environments
+- Seamless deployment of models trained in PyTorch and TensorFlow
+
+With strong community and industry backing, ONNX Runtime provides a flexible and efficient solution for mobile AI needs.
 
 The integration process is narrowed down into the following steps:
 
@@ -106,6 +128,37 @@ The app stands as a compelling proof of concept for implementing advanced AI cap
 The MediaPipe Multi-LoRA demo application showcases advanced versatility within mobile device constraints. The architecture requires only one base model stored on the smartphone, yet enables diverse functionalities through multiple LoRA adaptations. This unified platform allows seamless switching between different LoRA-tuned models, eliminating the need for storing multiple complete models while maintaining full functionality.
 
 **Dynamic LoRA Integration** enables at-runtime loading of domain-specific LoRA adapters, expanding capabilities across industrial applications without additional model training. The memory footprint of LoRA adapters remains minimal, typically less than 1% of the original model's parameter count. This efficient architecture supports multiple specialized tasks from a single base model, including entity extraction, commercialization, programming assistance, and customer support functions.
+
+<!-- Scale: 2B parameters = 150 px, so 1% = 1.5 px; adapters are drawn 2 px wide, the narrowest that stays visible. -->
+<figure class="post-figure">
+<svg viewBox="0 0 760 236" role="img" aria-label="Storage for four domains. Four separately fine-tuned 2-billion-parameter models take 4 times 2 billion, 8 billion parameters. The multi-LoRA app keeps one Gemma 2B base model plus four LoRA adapters, each under 1% of the base model's parameters, so the total stays close to 2 billion.">
+  <rect width="760" height="236" fill="#0a0a0a"/>
+  <g font-family="ui-monospace, monospace" font-size="11">
+    <text x="20" y="28" fill="#8a8a8a" letter-spacing="1.6">PARAMETERS STORED ON THE PHONE — FOUR DOMAINS</text>
+    <text x="20" y="64" fill="#8a8a8a" letter-spacing="1.2">FOUR FINE-TUNED MODELS</text>
+    <rect x="20" y="76" width="150" height="44" fill="#242424"/>
+    <rect x="176" y="76" width="150" height="44" fill="#242424"/>
+    <rect x="332" y="76" width="150" height="44" fill="#242424"/>
+    <rect x="488" y="76" width="150" height="44" fill="#242424"/>
+    <text x="30" y="102" fill="#8a8a8a" font-size="10">ENTITY EXTRACTION</text>
+    <text x="186" y="102" fill="#8a8a8a" font-size="10">COMMERCIALIZATION</text>
+    <text x="342" y="102" fill="#8a8a8a" font-size="10">PROGRAMMING</text>
+    <text x="498" y="102" fill="#8a8a8a" font-size="10">CUSTOMER SUPPORT</text>
+    <text x="740" y="102" fill="#f5f5f5" text-anchor="end">4 × 2B</text>
+    <text x="20" y="158" fill="#8a8a8a" letter-spacing="1.2">ONE BASE MODEL + FOUR LORA ADAPTERS</text>
+    <rect x="20" y="170" width="150" height="44" fill="#242424"/>
+    <text x="30" y="196" fill="#f5f5f5" font-size="10">GEMMA 2B BASE</text>
+    <rect x="174" y="170" width="2" height="44" fill="#ff2a2a" opacity="0.85"/>
+    <rect x="178" y="170" width="2" height="44" fill="#ff2a2a" opacity="0.45"/>
+    <rect x="182" y="170" width="2" height="44" fill="#ff2a2a" opacity="0.45"/>
+    <rect x="186" y="170" width="2" height="44" fill="#ff2a2a" opacity="0.45"/>
+    <line x1="194" y1="192" x2="214" y2="192" stroke="#ff2a2a" stroke-width="1" stroke-dasharray="4 3" opacity="0.65"/>
+    <text x="222" y="196" fill="#ff2a2a">4 ADAPTERS · EACH UNDER 1% OF THE BASE · SWAPPED AT RUNTIME</text>
+    <text x="740" y="196" fill="#f5f5f5" text-anchor="end">≈ 2B</text>
+  </g>
+</svg>
+<figcaption>Each domain is an adapter under 1% the size of the base model, so four specialisms take about the storage of one.</figcaption>
+</figure>
 
 The **Modular Architecture for Scalability**, built on the MediaPipe library, maintains clear separation between the Gemma 2B base model and associated LoRA extensions. This structured design creates a plug-and-play system, enabling straightforward integration of new LoRA adapters while maintaining the core inference pipeline's integrity. The modular approach significantly simplifies system updates and reduces maintenance requirements.
 
