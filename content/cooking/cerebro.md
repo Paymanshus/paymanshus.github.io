@@ -1,6 +1,6 @@
 ---
 title: CereBro
-summary: Structured, auditable, weighted opinion mining over the messy subjective web.
+summary: Reads the internet hive mind on a GPU, a laptop, or a framework, and turns it into pros and cons you can trace back to the source.
 date: 2026-07-07
 status: building
 stack: [Next.js, React 19, Tailwind v4, Drizzle, Supabase, LLM layer, Vitest]
@@ -23,8 +23,8 @@ mind. So I built a bro to read the hive mind for me, named after Professor X's m
 machine.
 
 Everyone has their own hive mind, too. Some people trust Reddit, some trust X, most trust a mix.
-Point CereBro at a target, like a GPU, a laptop or a framework, and the fields you care about. It
-pulls opinions from Reddit, Hacker News, forums and the open web and clusters them into pros and
+Point CereBro at a target, like a GPU, a laptop, or a framework, and the fields you care about. It
+pulls opinions from Reddit, Hacker News, forums, and the open web and clusters them into pros and
 cons with an LLM. You skip the 30 open tabs and go straight to what you need to make up your mind.
 
 ## The hard part: ranking opinions
@@ -34,7 +34,7 @@ Turning "this card is a beast" and "absolute furnace, returned it" into somethin
 is the same kind of problem recommender systems and retrieval live on, and it's a cool one to
 solve.
 
-CereBro's answer: the LLM extracts and clusters. Scoring is deterministic, zero-LLM math
-over weighted claims, and every number traces back to a source link. Exclude a source or
+So CereBro splits the job. The LLM extracts and clusters, and the scoring is plain deterministic
+math (zero LLM) over weighted claims, with every number tracing back to a source link. Exclude a source or
 re-weight one and everything recomputes instantly, with no model call. An LLM writes a summary
 on top of the counts, labelled as synthesized.
