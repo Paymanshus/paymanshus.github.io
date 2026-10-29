@@ -1,6 +1,6 @@
 ---
 title: keypsake
-summary: Everything you type, kept. A macOS app that saves typed text in any app, plus clipboard history.
+summary: Everything you type, anywhere, kept. A macOS (and soon Windows) app that saves typed text in any app, plus clipboard history and some neat stats to go with it.
 date: 2026-10-24
 status: building
 stack: [Swift, SwiftUI, AppKit, Accessibility API, SQLite, CryptoKit]
@@ -37,16 +37,14 @@ media:
 
 **typed it? keyp it.**
 
-Most work is a prompt now. Typing used to be short and surgical; now it's half an hour of
-paragraphs for a model, copied and pasted across five apps, with a clipboard that quietly eats
-whatever was there before. Then the connection drops, the page reloads, or one paste lands on top
-of the thing you spent 40 minutes writing. Gone.
+So much work is just a prompt now. Typing used to be short and surgical, now it's half an hour of
+paragraphs for a model, copied and pasted across like five apps, with a clipboard afflicted with short-term memory loss. You're literally always one connection drop, page reload, or accidental paste away from saying bye-bye to the thing you just spent 40 minutes writing.
 
-I got sick of losing my prompts, so I built the thing that keeps them. keypsake saves what you
-type into any text box, in any app, plus your clipboard history. It's on Mac now and meant for
+I got sick of losing my prompts, so I built something that keeps them. keypsake saves what you
+type into any text box, in any app, plus your clipboard history. It's a native Mac app for now and meant for
 Windows too, because nobody on any OS deserves to lose their words.
 
-- **Typed.** One entry per text box, with the app or website, its icon and the window title.
+- **Typed.** One entry per text box, with the app or website, its icon, and the window title.
   It keeps just what you typed this time.
 - **The moment it all went wrong.** As you write, keypsake keeps versions. If a box suddenly
   empties or loses most of its text, the version right before is saved, marked in amber and
@@ -55,16 +53,13 @@ Windows too, because nobody on any OS deserves to lose their words.
   removed words struck through, plus a plain summary like "40 words added".
 - **Copied.** Clipboard history with the source app or site, so a careless paste can't take
   anything with it.
-- **keypstats.** Even if you never lose a word, it's a kick to see how much you type, where, and
-  when you were most key-krazy, on a heat map by hour and weekday.
-
-I use it every day, and it has already saved me more retyping than I'd like to admit.
+- **keypstats.** Even if you don't care too much about losing your words, it's a kick to see how much you type, and where you spent most of your day.
 
 ## Privacy
 
-It's a keylogger you run on purpose, so trust came first. History is encrypted (AES-GCM) and
-stays on your Mac; nothing is sent anywhere. Password fields, password managers and concealed
-clipboard items are never recorded, and typed text is deleted after 7, 30, 90 or 365 days.
+It's basically a keylogger you run willingly, so privacy and trust are obviously important. History is encrypted and
+stays on device. Password fields, password managers, and concealed
+clipboard items are never recorded, and typed text is deleted after 7, 30, 90, or 365 days.
 
 Don't take my word for it. Point your own coding agent at the repo and ask it: is this safe, and
 does my text go anywhere?

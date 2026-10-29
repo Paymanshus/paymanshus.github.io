@@ -11,7 +11,7 @@ Karpathy's LLM wiki idea: hand a model your pile of raw notes and let it compile
 interlinked wiki out of them. This is my version.
 
 It pulls in everything I've dumped into Notion over the years and tries to make sense of it,
-summarizing, cross-referencing and clustering it into Markdown pages. If Obsidian isn't your
+summarizing, cross-referencing, and clustering it into Markdown pages. If Obsidian isn't your
 thing, a small web app lets you read it instead, with a knowledge graph and a Q&A layer that
 answers from the compiled pages.
 
@@ -19,5 +19,5 @@ answers from the compiled pages.
 
 Curation is what makes a wiki like this worth reading, but nobody wants to hand-curate a
 thousand notes. So the plan is semi-auto curation: the model surfaces what's most important and
-relevant, lets the rest fade into the background, and a human makes the final call. Eventually,
-a public, user-facing version.
+relevant and lets the rest fade into the background, and a human makes the final call. And
+eventually, a public, user-facing version.

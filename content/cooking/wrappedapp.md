@@ -28,7 +28,7 @@ media:
     width: 555
     height: 1200
   - src: /cooking/wrappedapp/desktop-find.webp
-    alt: Search with filters for people, dates, media and time of day.
+    alt: Search with filters for people, dates, media, and time of day.
     width: 1600
     height: 1000
   - src: /cooking/wrappedapp/phone-find.webp
@@ -45,8 +45,8 @@ built a little fake-WhatsApp reader just to read them again.
 Then the obvious thought: the whole chat is sitting right here, so why stop at reading it?
 
 - **Rewind.** A tap-through story of the chat, with its own soundtrack.
-- **Dashboard.** Who texts more, when you talk, streaks and signature words.
-- **Reader and search.** The full chat, with filters for people, dates, media and time of day.
+- **Dashboard.** Who texts more, when you talk, streaks, and signature words.
+- **Reader and search.** The full chat, with filters for people, dates, media, and time of day.
 - **Share.** Posters and videos, ready to post.
 
 ## Ask (still cooking)
@@ -60,4 +60,4 @@ key.
 
 ## Privacy
 
-There is no server. Chats, media and stats never leave your browser.
+There's no server. Chats, media, and stats never leave your browser.
