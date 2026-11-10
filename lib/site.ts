@@ -16,9 +16,22 @@ export const siteConfig = {
   links: {
     github: 'https://github.com/Paymanshus',
     linkedin: 'https://www.linkedin.com/in/paymanshus',
+    x: 'https://x.com/paymanshu',
+    kaggle: 'https://www.kaggle.com/paymanshus',
     huggingface: 'https://huggingface.co/paymanshus',
   },
 } as const;
+
+// External profiles, in display order. Rendered with rel="me" (footer and home)
+// and listed as Person.sameAs, which is what ties them to this site as one
+// identity for search engines. Add a profile here and it shows up everywhere.
+export const profileLinks = [
+  { href: siteConfig.links.github, label: 'GitHub' },
+  { href: siteConfig.links.linkedin, label: 'LinkedIn' },
+  { href: siteConfig.links.x, label: 'X' },
+  { href: siteConfig.links.kaggle, label: 'Kaggle' },
+  { href: siteConfig.links.huggingface, label: 'Hugging Face' },
+] as const;
 
 type SeoInput = {
   title: string;
@@ -118,11 +131,7 @@ export function personJsonLd() {
       'LangGraph',
       'Retrieval-Augmented Generation',
     ],
-    sameAs: [
-      siteConfig.links.github,
-      siteConfig.links.linkedin,
-      siteConfig.links.huggingface,
-    ],
+    sameAs: profileLinks.map((profile) => profile.href),
   };
 }
 
@@ -131,7 +140,10 @@ export function websiteJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     '@id': WEBSITE_ID,
-    name: siteConfig.defaultTitle,
+    // Google's site name (shown above the URL in results instead of "GitHub")
+    // comes from this node on the home page; it wants a short name, not a title.
+    name: siteConfig.name,
+    alternateName: [siteConfig.defaultTitle, 'paymanshus.github.io'],
     url: absoluteUrl('/'),
     description: siteConfig.description,
     publisher: personRef(),
@@ -186,7 +198,7 @@ export function createMetadata({
       url: absoluteUrl(path),
       title: fullTitle,
       description,
-      siteName: siteConfig.defaultTitle,
+      siteName: siteConfig.name,
       locale: siteConfig.locale,
       publishedTime,
       modifiedTime,

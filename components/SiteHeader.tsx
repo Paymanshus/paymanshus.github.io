@@ -7,7 +7,8 @@ import { Terminal } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'hi', key: 'hi' },
-  { href: '/experience', label: 'experience', key: 'experience' },
+  // "(v)" as a dictionary marks a verb: experience the resume, not a list of jobs.
+  { href: '/experience', label: 'experience', partOfSpeech: 'v', key: 'experience' },
   // Full label doesn't fit beside the others on a phone; shortLabel shows below sm.
   { href: '/cooking', label: "what's cooking", shortLabel: 'cooking', key: 'cooking' },
   { href: '/thoughts', label: 'thoughts', key: 'thoughts' },
@@ -69,6 +70,15 @@ export default function SiteHeader() {
               ) : (
                 item.label
               )}
+              {'partOfSpeech' in item ? (
+                // sm+ only: on a phone there's no room left in the nav for it.
+                <span
+                  aria-hidden="true"
+                  className="ml-1 hidden text-[0.7em] italic tracking-normal text-text-secondary/70 sm:inline"
+                >
+                  ({item.partOfSpeech})
+                </span>
+              ) : null}
               {isActive ? (
                 <motion.span
                   layoutId="nav-indicator"
