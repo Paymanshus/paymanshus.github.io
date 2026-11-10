@@ -119,6 +119,10 @@ Current shipped behavior:
 - Left: `PS`
 - Right: `hi`, `experience`, `what's cooking`, `thoughts`
 - Below `sm` (phones) the third item reads `cooking` and nav tracking drops from `0.28em` to `0.16em`, so all four fit inside the 24px gutters at 375px
+- `experience` carries a small dictionary-style `(v)` after it (italic, `0.7em`,
+  `text-text-secondary/70`, `aria-hidden`): experience the verb, i.e. go try the
+  talking resume, rather than a list of past jobs. Shown from `sm` up only; on
+  phones the nav has no room left for it.
 - Active route: thin red underline with motion layout transition
 
 Nav should stay light and structural. It is not meant to become a thick masthead.
@@ -127,7 +131,8 @@ Nav should stay light and structural. It is not meant to become a thick masthead
 
 `components/SiteFooter.tsx`, rendered by `SiteShell` on every route **except home**
 — the home hero is a fixed-height, non-scrolling composition (`h-screen
-overflow-hidden`) and a footer there would be clipped.
+overflow-hidden`) and a footer there would be clipped. Home carries a small,
+dimmed row of the profile links inside the hero instead (see Home below).
 
 Composition: a hairline `border-t`, then two columns — identity on the left (name
 in mono caps, one line of role copy, email), and two link stacks on the right
@@ -136,8 +141,9 @@ tracking (`0.18em`), `text-text-secondary` resting, `brand-red` on hover, matchi
 the nav's restraint. No logos, no social icons, no background fill.
 
 The external links carry `rel="me"` — load-bearing for SEO, not decoration: they
-are what ties the GitHub/LinkedIn/Hugging Face profiles to this domain as one
-identity. Keep them in sync with `sameAs` in `personJsonLd()`.
+are what ties the external profiles to this domain as one identity. They come
+from `profileLinks` in `lib/site.ts` (order: GitHub, LinkedIn, X, Kaggle, Hugging
+Face), which also feeds `sameAs` in `personJsonLd()`.
 
 ## Home / "Hi"
 
@@ -148,9 +154,24 @@ identity. Keep them in sync with `sameAs` in `personJsonLd()`.
   `SHARMA`
 - Descriptor line:
   `ML Engineer / Product Engineer`
+- Two intro lines in the UI sans (Space Grotesk), `max-w-xl`. No serif here.
+  - `Stirring the pile until it starts looking right` (`text-base md:text-lg`,
+    `text-text-secondary`): the owner's motto, from xkcd 1838. The whole line is
+    a link to https://xkcd.com/1838/ styled as plain text (no underline or
+    colour change; it only brightens slowly on hover). Use the motto only here.
+  - `PS: also open to quick chats, AI-agent first (check the experience out)`
+    (`text-sm`, `text-text-secondary/70`), with `experience` linking to
+    `/experience`.
 - Two CTAs:
   `Initialize Experience`
   `Read Thoughts`
+- Profile links pinned to the bottom-left of the hero: mono caps at `0.6rem`,
+  `0.18em` tracking, `text-text-secondary/60`, `brand-red` on hover, wrapping on
+  phones. Deliberately smaller and dimmer than anything else on the page.
+
+The intro line and profile row are there for search: without them home is ~40
+words with no outbound identity links, and Google crawled it but declined to
+index it (GSC, Nov 2026). Keep them quiet so the name stays the focus.
 
 ### Background system
 

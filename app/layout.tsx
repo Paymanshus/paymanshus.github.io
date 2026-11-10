@@ -73,7 +73,7 @@ export const metadata: Metadata = {
     url: siteConfig.url,
     title: siteConfig.defaultTitle,
     description: siteConfig.description,
-    siteName: siteConfig.defaultTitle,
+    siteName: siteConfig.name,
     images: [
       {
         url: absoluteAssetUrl(DEFAULT_OG_IMAGE),

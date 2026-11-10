@@ -1,19 +1,14 @@
 import Link from 'next/link';
-import { siteConfig } from '@/lib/site';
+import { profileLinks as profiles, siteConfig } from '@/lib/site';
 
 /**
  * Site-wide footer.
  *
  * Beyond navigation, this is the site's identity anchor: the profile links
  * carry rel="me", which is what lets search engines and IndieWeb consumers
- * tie github.com/Paymanshus, LinkedIn and Hugging Face to this domain as the
- * same person. Keep them in sync with the `sameAs` list in personJsonLd().
+ * tie the external profiles to this domain as the same person. The list lives
+ * in `profileLinks` (lib/site.ts), which also feeds Person.sameAs.
  */
-const profiles = [
-  { href: siteConfig.links.github, label: 'GitHub' },
-  { href: siteConfig.links.linkedin, label: 'LinkedIn' },
-  { href: siteConfig.links.huggingface, label: 'Hugging Face' },
-] as const;
 
 const internalLinks = [
   { href: '/experience', label: 'Experience' },

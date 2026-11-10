@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import RippleGrid from './RippleGrid';
+import { profileLinks } from '@/lib/site';
 
 export default function HeroSection() {
   const name = 'PAYMANSHU SHARMA';
@@ -76,7 +77,7 @@ export default function HeroSection() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.45, ease: 'easeOut' }}
-            className="mb-10 flex max-w-4xl flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[0.72rem] uppercase tracking-[0.34em] text-brand-red/90 md:text-sm md:tracking-[0.42em]"
+            className="mb-5 flex max-w-4xl flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[0.72rem] uppercase tracking-[0.34em] text-brand-red/90 md:text-sm md:tracking-[0.42em]"
           >
             {descriptorSegments.map((segment, index) => (
               <span key={segment} className="flex items-center gap-x-3">
@@ -84,6 +85,38 @@ export default function HeroSection() {
                 {index < descriptorSegments.length - 1 && <span className="text-brand-red/55">/</span>}
               </span>
             ))}
+          </motion.div>
+
+          {/* Real copy for search: without it the page is ~40 words of chrome
+              and Google crawls it but won't index it. Line one is the owner's
+              motto from xkcd 1838; its link is meant to be found, not seen.
+              Use the motto once on the site. */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.55, ease: 'easeOut' }}
+            className="mb-10 max-w-xl"
+          >
+            <p className="text-base leading-relaxed text-text-secondary md:text-lg">
+              <a
+                href="https://xkcd.com/1838/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors duration-700 hover:text-text-primary/80"
+              >
+                Stirring the pile until it starts looking right
+              </a>
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-text-secondary/70">
+              PS: also open to quick chats, AI-agent first (check the{' '}
+              <Link
+                href="/experience"
+                className="transition-colors duration-300 hover:text-brand-red"
+              >
+                experience
+              </Link>{' '}
+              out)
+            </p>
           </motion.div>
 
           <motion.div
@@ -114,6 +147,28 @@ export default function HeroSection() {
           </motion.div>
         </div>
       </div>
+
+      {/* Home has no footer, so the rel="me" profile links live here. Kept
+          small and dim on purpose: they're for search, the hero stays the focus. */}
+      <motion.nav
+        aria-label="Elsewhere"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8, delay: 1.0 }}
+        className="absolute inset-x-0 bottom-6 z-10 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-text-secondary/60"
+      >
+        {profileLinks.map((profile) => (
+          <a
+            key={profile.href}
+            href={profile.href}
+            rel="me noopener noreferrer"
+            target="_blank"
+            className="transition-colors duration-300 hover:text-brand-red"
+          >
+            {profile.label}
+          </a>
+        ))}
+      </motion.nav>
     </div>
   );
 }
