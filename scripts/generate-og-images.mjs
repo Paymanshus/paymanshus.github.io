@@ -18,7 +18,7 @@ import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import matter from 'gray-matter';
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshus.github.io').replace(/\/+$/, '');
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshu.com').replace(/\/+$/, '');
 const ROOT_DIR = process.cwd();
 const BLOG_DIR = path.join(ROOT_DIR, 'content', 'blog');
 const OG_DIR = path.join(ROOT_DIR, 'public', 'og');
@@ -115,7 +115,7 @@ function defaultCard() {
         },
       },
     ],
-    'paymanshus.github.io',
+    'paymanshu.com',
     'Portfolio',
   );
 }

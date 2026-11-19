@@ -4,11 +4,39 @@ Two things deploy from `main`:
 
 | Part | Where | How |
 |---|---|---|
-| Site (Next.js static export) | GitHub Pages | `.github/workflows/deploy.yml`, automatic on every push to `main` |
+| Site (Next.js static export) | GitHub Pages at `https://paymanshu.com` | `.github/workflows/deploy.yml`, automatic on every push to `main` |
 | Voice/terminal agent | Oracle VM, `https://ps-agent.duckdns.org` | `.github/workflows/agent.yml`, automatic on pushes to `main` that touch the agent; or manually |
 
 **Pushing to `main` is deploying.** Work on a branch; merging or pushing to `main`
 needs the owner's OK.
+
+## Domain and DNS
+
+`paymanshu.com` is registered at Cloudflare (bought 2026-11-19, 1 year,
+auto-renew; check the card before 2027-11-19). Cloudflare Registrar requires
+Cloudflare DNS, so the records live there: dashboard → `paymanshu.com` → DNS → Records.
+
+| Type | Name | Content | Proxy |
+|---|---|---|---|
+| A | `@` | `185.199.108.153`, `.109.153`, `.110.153`, `.111.153` (4 records) | DNS only |
+| AAAA | `@` | `2606:50c0:8000::153`, `8001::153`, `8002::153`, `8003::153` (4 records) | DNS only |
+| CNAME | `www` | `paymanshus.github.io` | DNS only |
+
+Keep them **DNS only** (grey cloud). GitHub issues the TLS certificate itself
+and has to see its own IPs; Cloudflare's proxy in front breaks that and the
+redirects.
+
+GitHub side: repo Settings → Pages → Custom domain `paymanshu.com`, Enforce
+HTTPS on. Same thing from the CLI:
+
+```bash
+gh api -X PUT repos/Paymanshus/paymanshus.github.io/pages -f cname=paymanshu.com
+gh api -X PUT repos/Paymanshus/paymanshus.github.io/pages -F https_enforced=true   # once the cert is issued
+```
+
+`NEXT_PUBLIC_SITE_URL` in `deploy.yml` and the agent's `ALLOWED_ORIGINS` must
+match the domain. If the domain ever changes, deploy the agent's CORS first,
+then the site.
 
 ## Agent: automatic (CI/CD)
 

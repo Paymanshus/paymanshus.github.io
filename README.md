@@ -1,7 +1,7 @@
 # Paymanshu Sharma — Portfolio
 
 Personal portfolio for Paymanshu Sharma, Machine Learning Engineer
-(Bangalore). Live at **https://paymanshus.github.io**.
+(Bangalore). Live at **https://paymanshu.com** (GitHub Pages; `paymanshus.github.io` redirects there).
 
 The site is a statically-exported Next.js app plus a standalone Python
 LiveKit voice agent that powers the interactive resume.

@@ -7,7 +7,8 @@ After completing a major feature or structural change, update `TECH_SPEC.md`
 
 ## What this repo is
 
-Static-exported Next.js portfolio at https://paymanshus.github.io, plus a
+Static-exported Next.js portfolio at https://paymanshu.com (GitHub Pages repo
+`paymanshus.github.io`, which now redirects to the custom domain), plus a
 standalone Python LiveKit voice agent in `agent/` that powers the interactive
 resume on `/experience`.
 

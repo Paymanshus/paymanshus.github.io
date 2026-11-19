@@ -1,7 +1,9 @@
 # SEO Setup Runbook
 
 One-time setup for search engine verification, analytics, and indexing on
-`https://paymanshus.github.io`. Do these sections in order — GSC and GA4 both
+`https://paymanshu.com` (moved from `https://paymanshus.github.io` on
+2026-11-19; see "Custom domain move" below). Older steps still name the
+github.io URL where they describe what was done then. Do these sections in order — GSC and GA4 both
 end with the same pattern: set a GitHub repository **variable**, uncomment a
 line in the deploy workflow, push to `main`, wait for the Pages deploy, then
 verify in the console.
@@ -21,7 +23,31 @@ account you want tied to Search Console / Analytics.
   the GitHub Actions variable is set.
 - **Owner still does:** click **Verify** in GSC (if not done) → submit
   `sitemap.xml` → confirm GA4 Realtime after deploy.
-- **DNS TXT on `paymanshus.github.io`:** not possible. GitHub owns that DNS.
+- **DNS TXT:** not possible on `paymanshus.github.io` (GitHub owns that DNS),
+  but possible now on `paymanshu.com` (Cloudflare DNS). Use it for a GSC
+  **Domain** property.
+
+## Custom domain move (2026-11-19)
+
+The site moved to `https://paymanshu.com`. GitHub Pages 301-redirects every
+`paymanshus.github.io` URL to the same path on the new domain, and canonicals,
+sitemap, feeds, OG and JSON-LD all use the new URL (`NEXT_PUBLIC_SITE_URL`).
+
+Owner steps in Search Console:
+
+1. **Add property → Domain → `paymanshu.com`.** Google shows a
+   `google-site-verification=...` TXT value. Add it in Cloudflare (DNS → Records
+   → Add record → Type TXT, Name `@`, Content = the value), then click Verify.
+   A Domain property covers http/https and every subdomain.
+2. Submit `https://paymanshu.com/sitemap.xml` under **Sitemaps** in the new property.
+3. In the **old** `https://paymanshus.github.io/` property: Settings →
+   **Change of address** → pick the new property. This needs the 301s to be
+   live, which they are once Pages has the custom domain.
+4. Keep the old property and the `google51d43957481c87ef.html` file; they cost
+   nothing and help Google follow the move.
+5. GA4: Admin → Data streams → edit the web stream URL to `https://paymanshu.com`
+   (the measurement ID does not change).
+6. Bing Webmaster Tools: re-import from GSC, or use its Site Move tool.
 - **Google Tag Manager:** not used; skip.
 
 ## 1. What's already wired

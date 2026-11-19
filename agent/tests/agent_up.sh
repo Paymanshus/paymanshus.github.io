@@ -15,5 +15,5 @@ sleep 20
   echo "--- health ---"
   curl -s -m 5 http://localhost:8080/api/health; echo
   echo "--- preflight headers ---"
-  curl -s -m 5 -X OPTIONS -H "Origin: https://paymanshus.github.io" -D - -o /dev/null http://localhost:8080/api/chat | grep -i "access-control"
+  curl -s -m 5 -X OPTIONS -H "Origin: https://paymanshu.com" -D - -o /dev/null http://localhost:8080/api/chat | grep -i "access-control"
 } 1>&2

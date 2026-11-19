@@ -9,7 +9,7 @@ export const siteConfig = {
   defaultTitle: 'Paymanshu Sharma | AI Product Engineer',
   description:
     'Paymanshu Sharma is a Machine Learning Engineer in Bangalore, building agentic AI and voice systems. Portfolio with an interactive resume you can talk to — PDF, terminal, and voice — plus essays on ML and engineering.',
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshus.github.io',
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshu.com',
   locale: 'en_US',
   location: 'Bangalore, India',
   email: 'paymanshu@gmail.com',
@@ -143,7 +143,7 @@ export function websiteJsonLd() {
     // Google's site name (shown above the URL in results instead of "GitHub")
     // comes from this node on the home page; it wants a short name, not a title.
     name: siteConfig.name,
-    alternateName: [siteConfig.defaultTitle, 'paymanshus.github.io'],
+    alternateName: [siteConfig.defaultTitle, 'paymanshu.com', 'paymanshus.github.io'],
     url: absoluteUrl('/'),
     description: siteConfig.description,
     publisher: personRef(),

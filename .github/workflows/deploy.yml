@@ -19,7 +19,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      NEXT_PUBLIC_SITE_URL: https://paymanshus.github.io
+      NEXT_PUBLIC_SITE_URL: https://paymanshu.com
       NEXT_PUBLIC_GA_ID: ${{ vars.NEXT_PUBLIC_GA_ID }}
       # HTML-tag verification is also baked into lib/site.ts so GSC works even
       # if this variable is unset. Keep both in sync if Google rotates the token.

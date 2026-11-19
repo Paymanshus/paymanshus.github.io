@@ -4,7 +4,8 @@
 
 ## Current Product Shape
 
-This repo is a static-exported Next.js 15 portfolio intended for `paymanshus.github.io`.
+This repo is a static-exported Next.js 15 portfolio served at `https://paymanshu.com`
+(GitHub Pages from the `paymanshus.github.io` repo, custom domain since 2026-11-19).
 
 Current public routes:
 
@@ -379,7 +380,7 @@ Workflow behavior:
 
 - Triggers on push to `main`
 - Also supports manual dispatch
-- Sets `NEXT_PUBLIC_SITE_URL=https://paymanshus.github.io`
+- Sets `NEXT_PUBLIC_SITE_URL=https://paymanshu.com`
 - Runs `npm ci`
 - Runs `npm run build`
 - Uploads `./out`
@@ -388,6 +389,10 @@ Workflow behavior:
 GitHub Pages should be configured to use:
 
 - Source: GitHub Actions
+- Custom domain: `paymanshu.com`, Enforce HTTPS on. Set in repo Settings → Pages
+  (Actions-based deploys ignore a `CNAME` file, so there isn't one). GitHub
+  301-redirects `paymanshus.github.io/*` and `www.paymanshu.com/*` to the apex.
+- DNS lives in Cloudflare (registrar too). See `DEPLOY.md` → Domain and DNS.
 
 ### Repo replacement plan
 
@@ -483,7 +488,8 @@ Runs in a daemon thread inside the same process as the agent (port via
   through. The ladder only falls through to the next model before any text has
   been sent. `ChatResume.tsx` (`lib/chatStream.ts`) streams first and falls back
   to `/api/chat`, then to the offline keyword answers.
-- CORS restricted to `paymanshus.github.io` + localhost dev origins.
+- CORS restricted to `paymanshu.com`, `www.paymanshu.com`, `paymanshus.github.io`
+  + localhost dev origins. The first entry is the fallback for unknown origins.
 - In-memory rate limits (per-IP/minute, per-IP/day, global/day, **global/minute**):
   token `6/30/300/20`, chat `10/100/3000/60`. 429 responses carry a
   human-readable message that the terminal renders.
