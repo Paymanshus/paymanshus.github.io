@@ -299,7 +299,7 @@ def _smtp_configured() -> bool:
     return all(os.environ.get(k) for k in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"))
 
 
-SITE_URL = os.environ.get("VOICE_SITE_URL", "https://paymanshus.github.io")
+SITE_URL = os.environ.get("VOICE_SITE_URL", "https://paymanshu.com")
 
 
 def _send_back_email(to: str) -> None:

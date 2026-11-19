@@ -204,7 +204,7 @@ The home route should feel atmospheric but still disciplined enough that the typ
 - The file is dropped in unchanged; screen-only CSS is injected on load: transparent paper so it sits flush on the panel, 1.12× on wide screens, and reflow on phones (rows wrap, contact separators can break)
 - Links inside it open in a new tab (web) or at the top level (mail/phone), never inside the frame
 - Red outlined "Get the PDF" action above it, lined up with the resume's own margins — opens the PDF in a new tab, not a download
-- The PDF stays at its standalone URL (`paymanshus.github.io/assets/Paymanshu_Sharma_Resume.pdf`) so it can be shared with recruiters and on profiles without exposing the full site
+- The PDF stays at its standalone URL (`paymanshu.com/assets/Paymanshu_Sharma_Resume.pdf`; the old github.io URL redirects) so it can be shared with recruiters and on profiles without exposing the full site
 - The iframe is **never** `loading="lazy"`: the panel sits below the fold, and a lazy iframe stayed blank until the visitor happened to scroll
 
 ### Chat mode

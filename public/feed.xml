@@ -2,15 +2,15 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Thoughts — Paymanshu Sharma</title>
-    <link>https://paymanshus.github.io/thoughts/</link>
+    <link>https://paymanshu.com/thoughts/</link>
     <description>Essays on machine learning, agents, and engineering by Paymanshu Sharma.</description>
     <language>en-us</language>
-    <lastBuildDate>Tue, 27 Oct 2026 21:35:27 GMT</lastBuildDate>
-    <atom:link href="https://paymanshus.github.io/feed.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Thu, 19 Nov 2026 18:11:56 GMT</lastBuildDate>
+    <atom:link href="https://paymanshu.com/feed.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Fitting Really Big Models into Not-So-Big GPUs: Precision and Quantization</title>
-      <link>https://paymanshus.github.io/thoughts/llm-optimization-memory-gpu-cpu/</link>
-      <guid isPermaLink="true">https://paymanshus.github.io/thoughts/llm-optimization-memory-gpu-cpu/</guid>
+      <link>https://paymanshu.com/thoughts/llm-optimization-memory-gpu-cpu/</link>
+      <guid isPermaLink="true">https://paymanshu.com/thoughts/llm-optimization-memory-gpu-cpu/</guid>
       <pubDate>Sat, 14 Dec 2024 00:00:00 GMT</pubDate>
       <description>How much GPU memory a model actually needs and how to cut it down — fp32, fp16 and bf16, what quantization trades away, LLM.int8() and bitsandbytes in practice, and the KV cache that grows on top of the weights.</description>
       <category>llm optimization</category>
@@ -22,8 +22,8 @@
     </item>
     <item>
       <title>On-Device Large Language Models on Android</title>
-      <link>https://paymanshus.github.io/thoughts/on-device-llms-on-android/</link>
-      <guid isPermaLink="true">https://paymanshus.github.io/thoughts/on-device-llms-on-android/</guid>
+      <link>https://paymanshu.com/thoughts/on-device-llms-on-android/</link>
+      <guid isPermaLink="true">https://paymanshu.com/thoughts/on-device-llms-on-android/</guid>
       <pubDate>Sat, 14 Dec 2024 00:00:00 GMT</pubDate>
       <description>Why running LLMs on phones is worth the trouble, and two working Android demos — a RAG document-querying app built on Phi-3-mini and ONNX Runtime, and a multi-LoRA adapter-switching app on Gemma 2B.</description>
       <category>on-device ai</category>

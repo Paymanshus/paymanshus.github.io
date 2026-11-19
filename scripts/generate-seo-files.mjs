@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshus.github.io').replace(/\/+$/, '');
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshu.com').replace(/\/+$/, '');
 const ROOT_DIR = process.cwd();
 const BLOG_DIR = path.join(ROOT_DIR, 'content', 'blog');
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');

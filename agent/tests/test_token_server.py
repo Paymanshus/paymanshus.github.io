@@ -125,8 +125,11 @@ async def test_token_missing_credentials(client, monkeypatch):
     assert resp.status == 500
 
 
-async def test_cors_allows_known_origin(client):
-    origin = "https://paymanshus.github.io"
+@pytest.mark.parametrize(
+    "origin",
+    ["https://paymanshu.com", "https://www.paymanshu.com", "https://paymanshus.github.io"],
+)
+async def test_cors_allows_known_origin(client, origin):
     resp = await client.options("/api/token", headers={"Origin": origin})
     assert resp.status == 204
     assert resp.headers["Access-Control-Allow-Origin"] == origin
@@ -135,7 +138,7 @@ async def test_cors_allows_known_origin(client):
 async def test_cors_rejects_unknown_origin(client):
     resp = await client.options("/api/token", headers={"Origin": "https://evil.example"})
     # Falls back to production origin, so the browser will block evil.example
-    assert resp.headers["Access-Control-Allow-Origin"] == "https://paymanshus.github.io"
+    assert resp.headers["Access-Control-Allow-Origin"] == "https://paymanshu.com"
 
 
 async def test_token_rate_limit_per_minute(client):

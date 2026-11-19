@@ -6,12 +6,12 @@ This site is the personal portfolio of Paymanshu Sharma. It includes an interact
 
 ## Site
 
-- [Home](https://paymanshus.github.io/): landing page with a short intro and links into the resume and blog.
-- [Experience](https://paymanshus.github.io/experience/): interactive resume with three modes — PDF, terminal chat, and a live LiveKit voice agent.
-- [What's cooking](https://paymanshus.github.io/cooking/): side projects in progress, including CereBro (auditable opinion mining), Second Voice (a cloned-voice speech app), WrappedApp (local-first WhatsApp chat analytics), WatchlistXplore and PS-LLMWiki.
-- [Thoughts](https://paymanshus.github.io/thoughts/): blog index covering design, AI, and frontend engineering.
-- [Fitting Really Big Models into Not-So-Big GPUs: Precision and Quantization](https://paymanshus.github.io/thoughts/llm-optimization-memory-gpu-cpu/): how much GPU memory a model needs — fp32/fp16/bf16, quantization with LLM.int8() and bitsandbytes, and KV cache sizing.
-- [On-Device Large Language Models on Android](https://paymanshus.github.io/thoughts/on-device-llms-on-android/): why on-device LLMs matter, with Android demos using Phi-3-mini and Gemma 2B.
+- [Home](https://paymanshu.com/): landing page with a short intro and links into the resume and blog.
+- [Experience](https://paymanshu.com/experience/): interactive resume with three modes — PDF, terminal chat, and a live LiveKit voice agent.
+- [What's cooking](https://paymanshu.com/cooking/): side projects in progress, including CereBro (auditable opinion mining), Second Voice (a cloned-voice speech app), WrappedApp (local-first WhatsApp chat analytics), WatchlistXplore and PS-LLMWiki.
+- [Thoughts](https://paymanshu.com/thoughts/): blog index covering design, AI, and frontend engineering.
+- [Fitting Really Big Models into Not-So-Big GPUs: Precision and Quantization](https://paymanshu.com/thoughts/llm-optimization-memory-gpu-cpu/): how much GPU memory a model needs — fp32/fp16/bf16, quantization with LLM.int8() and bitsandbytes, and KV cache sizing.
+- [On-Device Large Language Models on Android](https://paymanshu.com/thoughts/on-device-llms-on-android/): why on-device LLMs matter, with Android demos using Phi-3-mini and Gemma 2B.
 
 ## Elsewhere
 

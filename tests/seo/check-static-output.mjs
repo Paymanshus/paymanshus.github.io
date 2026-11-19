@@ -14,7 +14,7 @@ import matter from 'gray-matter';
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, 'out');
 const BLOG_DIR = path.join(ROOT, 'content', 'blog');
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshus.github.io').replace(/\/+$/, '');
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://paymanshu.com').replace(/\/+$/, '');
 const PERSON_ID = `${SITE_URL}/#person`;
 
 let failures = 0;

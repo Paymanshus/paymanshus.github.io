@@ -59,7 +59,7 @@ BREAKER_STATE_PATH = Path(
 )
 
 # Optional attribution headers; harmless if unset.
-OPENROUTER_REFERER = os.environ.get("OPENROUTER_REFERER", "https://paymanshus.github.io")
+OPENROUTER_REFERER = os.environ.get("OPENROUTER_REFERER", "https://paymanshu.com")
 OPENROUTER_TITLE = os.environ.get("OPENROUTER_TITLE", "paymanshu-portfolio")
 
 

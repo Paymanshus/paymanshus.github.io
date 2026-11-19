@@ -75,7 +75,7 @@ flyctl logs -a <app> | grep "registered worker"
    script), uncomment and fill:
    `NEXT_PUBLIC_AGENT_URL: https://<app>.fly.dev`
 2. CORS is already correct: `token_server.py` `ALLOWED_ORIGINS` includes
-   `https://paymanshus.github.io`.
+   `https://paymanshu.com` (and the old `https://paymanshus.github.io`).
 3. Redeploy the site:
    `bash scripts/deploy-pages.sh -m "Point voice/terminal at fly.io agent"`
    (script builds, syncs to `deployed/`, purges private paths, commits,

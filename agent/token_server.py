@@ -48,6 +48,11 @@ AGENT_NAME = "paymanshu-voice"
 TOKEN_TTL_SECONDS = 600  # 10 minutes
 
 ALLOWED_ORIGINS = [
+    # First entry is the fallback for unknown origins, so keep the canonical
+    # site first. github.io stays allowed: it 301s to paymanshu.com, but a
+    # cached page or an old tab can still call from there.
+    "https://paymanshu.com",
+    "https://www.paymanshu.com",
     "https://paymanshus.github.io",
     "http://localhost:3000",
     "http://localhost:3001",
